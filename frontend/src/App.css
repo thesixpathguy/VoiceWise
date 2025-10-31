@@ -1,0 +1,18 @@
+/* Custom styles for VoiceWise - Most styling is done with Tailwind CSS */
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Custom animations beyond Tailwind's defaults */
+@keyframes pulse-slow {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* You can add custom component styles here if needed */

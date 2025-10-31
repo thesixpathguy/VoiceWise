@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Environment variables
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Whisper models cache
+*.pt
+models/
+
+# Temporary files
+*.tmp
+*.log
+temp/
+tmp/
+
+# Audio files
+*.mp3
+*.wav
+*.m4a
+recordings/
