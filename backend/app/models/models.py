@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Boolean, Float, ForeignKey, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 from app.core.database import Base
 
 
@@ -11,8 +12,9 @@ class Call(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     call_id = Column(String(255), unique=True, nullable=False, index=True)
-    phone_number = Column(String(20), nullable=False)
+    phone_number = Column(String(20), nullable=False, index=True)
     raw_transcript = Column(Text, nullable=True)
+    transcript_embedding = Column(Vector(384), nullable=True)  # all-MiniLM-L6-v2 dimension
     duration_seconds = Column(Integer, nullable=True)
     status = Column(String(50), nullable=True)  # initiated, completed, failed, etc.
     gym_id = Column(String(255), nullable=False, index=True)
