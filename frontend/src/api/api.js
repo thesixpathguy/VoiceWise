@@ -37,12 +37,6 @@ export const callsAPI = {
     return response.data;
   },
 
-  // Transcribe call
-  transcribeCall: async (callId) => {
-    const response = await api.post(`/api/calls/${callId}/transcribe`);
-    return response.data;
-  },
-
   // Analyze call
   analyzeCall: async (callId) => {
     const response = await api.post(`/api/calls/${callId}/analyze`);

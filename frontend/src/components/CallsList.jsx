@@ -41,16 +41,6 @@ export default function CallsList() {
     loadInsights(call.call_id);
   };
 
-  const handleTranscribe = async (callId) => {
-    try {
-      await callsAPI.transcribeCall(callId);
-      alert('Transcription started! Please refresh in a moment.');
-      loadCalls();
-    } catch (err) {
-      alert('Failed to start transcription: ' + err.message);
-    }
-  };
-
   const handleAnalyze = async (callId) => {
     try {
       await callsAPI.analyzeCall(callId);
@@ -68,7 +58,7 @@ export default function CallsList() {
     switch (status) {
       case 'completed':
         return 'bg-green-500/20 text-green-400';
-      case 'in_progress':
+      case 'initiated':
         return 'bg-yellow-500/20 text-yellow-400';
       case 'failed':
         return 'bg-red-500/20 text-red-400';
@@ -154,17 +144,6 @@ export default function CallsList() {
 
                 {call.status === 'completed' && (
                   <div className="mt-4 flex gap-2">
-                    {!call.raw_transcript && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTranscribe(call.call_id);
-                        }}
-                        className="flex-1 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm transition-colors"
-                      >
-                        📝 Transcribe
-                      </button>
-                    )}
                     {call.raw_transcript && (
                       <button
                         onClick={(e) => {
