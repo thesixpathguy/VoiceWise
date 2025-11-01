@@ -4,11 +4,14 @@ from datetime import datetime
 
 
 # Call Schemas
+
+# Client -> API
 class CallInitiate(BaseModel):
     """Request schema for initiating calls"""
     phone_numbers: List[str] = Field(..., min_items=1, description="List of phone numbers to call")
 
 
+# API -> Client (part of CallInitiateResponse)
 class CallResponse(BaseModel):
     """Response schema for single call"""
     phone_number: str
@@ -16,12 +19,14 @@ class CallResponse(BaseModel):
     status: str
 
 
+# API -> Client
 class CallInitiateResponse(BaseModel):
     """Response schema for batch call initiation"""
     calls_initiated: List[CallResponse]
     total: int
 
 
+# Service -> API -> Client
 class CallDetail(BaseModel):
     """Detailed call information"""
     call_id: str
@@ -36,6 +41,8 @@ class CallDetail(BaseModel):
 
 
 # Webhook Schemas
+
+# External (Bland AI) -> API
 class WebhookPayload(BaseModel):
     """Bland AI webhook payload - flexible to handle various payload structures"""
     call_id: Optional[str] = Field(None, description="Unique call identifier from Bland AI")
@@ -49,6 +56,8 @@ class WebhookPayload(BaseModel):
 
 
 # Insight Schemas
+
+# Inter-service (AI Service -> Insight Service)
 class InsightData(BaseModel):
     """Extracted insights data"""
     main_topics: List[str] = Field(default_factory=list)
@@ -59,6 +68,7 @@ class InsightData(BaseModel):
     confidence: float = 0.0
 
 
+# Service -> API -> Client
 class InsightResponse(BaseModel):
     """Insight response with call info"""
     call_id: str
@@ -75,6 +85,8 @@ class InsightResponse(BaseModel):
 
 
 # Dashboard Schemas
+
+# Service -> API -> Client (part of DashboardSummary)
 class SentimentDistribution(BaseModel):
     """Sentiment distribution for dashboard"""
     positive: int = 0
@@ -82,12 +94,14 @@ class SentimentDistribution(BaseModel):
     negative: int = 0
 
 
+# Service -> API -> Client (part of DashboardSummary)
 class PainPoint(BaseModel):
     """Pain point with count"""
     name: str
     count: int
 
 
+# Service -> API -> Client (part of DashboardSummary)
 class HighInterestQuote(BaseModel):
     """Quote from high-interest call"""
     quote: str
@@ -95,6 +109,7 @@ class HighInterestQuote(BaseModel):
     phone_number: str
 
 
+# Service -> API -> Client
 class DashboardSummary(BaseModel):
     """Dashboard summary response"""
     total_calls: int
@@ -105,6 +120,8 @@ class DashboardSummary(BaseModel):
 
 
 # Health Check
+
+# API -> Client
 class HealthCheck(BaseModel):
     """Health check response"""
     status: str

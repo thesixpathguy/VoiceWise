@@ -29,10 +29,6 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Whisper models cache
-*.pt
-models/
-
 # Temporary files
 *.tmp
 *.log

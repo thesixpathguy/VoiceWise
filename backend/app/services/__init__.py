@@ -1,1 +1,1 @@
-# Services package (AI, transcription, etc.)
+# Services package (AI, Calls. Insights, etc.)
