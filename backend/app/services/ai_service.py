@@ -1,73 +1,14 @@
-import os
-import httpx
 import json
-from typing import Optional
 from app.schemas.schemas import InsightData
 from app.core.config import settings
 
 
 class AIService:
-    """Service for AI operations: transcription and insight extraction"""
+    """Service for AI operations: insight extraction using Groq LLM"""
     
     def __init__(self):
         self.groq_api_key = settings.GROQ_API_KEY
         self.groq_api_url = "https://api.groq.com/openai/v1/chat/completions"
-        self.groq_audio_url = "https://api.groq.com/openai/v1/audio/transcriptions"
-    
-    async def transcribe_audio(self, audio_url: str) -> Optional[str]:
-        """
-        Transcribe audio using Groq Whisper API
-        
-        Args:
-            audio_url: URL to the audio recording
-        
-        Returns:
-            Transcript text or None
-        """
-        if not self.groq_api_key:
-            return "This is a sample transcript. The gym member expressed satisfaction with the facilities but mentioned the gym is crowded during peak hours. They showed interest in personal training services and suggested adding more cardio equipment."
-        
-        try:
-            # Use requests library with certifi for SSL
-            import requests
-            import certifi
-            
-            # Download audio file
-            audio_response = requests.get(audio_url, timeout=60.0, verify=certifi.where())
-            audio_response.raise_for_status()
-            audio_data = audio_response.content
-            
-            # Transcribe using Groq Whisper
-            headers = {
-                "Authorization": f"Bearer {self.groq_api_key}"
-            }
-            
-            files = {
-                "file": ("recording.mp3", audio_data, "audio/mpeg")
-            }
-            
-            data = {
-                "model": "whisper-large-v3",
-                "response_format": "json",
-                "language": "en"
-            }
-            
-            response = requests.post(
-                self.groq_audio_url,
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=120.0,
-                verify=certifi.where()
-            )
-            response.raise_for_status()
-            result = response.json()
-            
-            return result.get("text", "")
-        
-        except Exception as e:
-            print(f"❌ Transcription error: {str(e)}")
-            return None
     
     async def extract_insights(self, transcript: str) -> InsightData:
         """
@@ -87,28 +28,11 @@ class AIService:
             print("⚠️ WARNING: Empty transcript received!")
         
         if not self.groq_api_key:
-            print("⚠️ No Groq API key found - returning mock data")
-            # Return mock data for development
-            return InsightData(
-                main_topics=["equipment quality", "class schedules", "facility cleanliness"],
-                sentiment="positive",
-                pain_points=["crowded during peak hours", "needs more cardio machines"],
-                opportunities=["interested in personal training", "nutrition counseling interest"],
-                capital_interest=True,
-                confidence=0.85
-            )
+            raise Exception("GROQ_API_KEY is not configured. Please set it in your .env file.")
         
         # Check if transcript is empty
         if not transcript or len(transcript.strip()) == 0:
-            print("⚠️ Empty transcript - returning default insights")
-            return InsightData(
-                main_topics=["no conversation"],
-                sentiment="neutral",
-                pain_points=[],
-                opportunities=[],
-                capital_interest=False,
-                confidence=0.0
-            )
+            raise Exception("Cannot extract insights from empty transcript.")
         
         try:
             print(f"🤖 Calling Groq API for insight extraction...")
@@ -181,38 +105,14 @@ class AIService:
         except requests.exceptions.HTTPError as e:
             print(f"❌ Insight extraction HTTP error: {e}")
             print(f"Response: {e.response.text if hasattr(e, 'response') else 'No response'}")
-            # Return default insights on error
-            return InsightData(
-                main_topics=["general discussion"],
-                sentiment="neutral",
-                pain_points=[],
-                opportunities=[],
-                capital_interest=False,
-                confidence=0.0
-            )
+            raise Exception(f"Groq API HTTP error: {e}")
         except json.JSONDecodeError as e:
             print(f"❌ Failed to parse AI response as JSON: {str(e)}")
             print(f"Raw content: {content if 'content' in locals() else 'N/A'}")
-            # Return default insights on error
-            return InsightData(
-                main_topics=["general discussion"],
-                sentiment="neutral",
-                pain_points=[],
-                opportunities=[],
-                capital_interest=False,
-                confidence=0.0
-            )
+            raise Exception(f"Failed to parse Groq API response as JSON: {str(e)}")
         except Exception as e:
             print(f"❌ Insight extraction error: {str(e)}")
-            # Return default insights on error
-            return InsightData(
-                main_topics=["general discussion"],
-                sentiment="neutral",
-                pain_points=[],
-                opportunities=[],
-                capital_interest=False,
-                confidence=0.0
-            )
+            raise
     
     def _build_insight_prompt(self, transcript: str) -> str:
         """Build the prompt for insight extraction"""

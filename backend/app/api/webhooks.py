@@ -42,12 +42,6 @@ async def bland_ai_webhook(
             # Return success to Bland AI but log the issue
             return {"status": "accepted", "note": "validation_warning"}
         
-        # Log webhook details
-        transcript_len = len(payload.concatenated_transcript) if payload.concatenated_transcript else 0
-        print(f"📨 Webhook: call_id={payload.call_id}, status={payload.status}, transcript_length={transcript_len}")
-        if payload.concatenated_transcript:
-            print(f"📝 Transcript preview: {payload.concatenated_transcript[:200]}...")
-        
         # Update call record in database
         call_service = CallService(db)
         call = call_service.update_call_from_webhook(payload)

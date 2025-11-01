@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import httpx
 import os
+import asyncio
 from datetime import datetime
 from app.models.models import Call
 from app.schemas.schemas import CallResponse, CallInitiateResponse, WebhookPayload
@@ -35,8 +36,13 @@ class CallService:
         """
         calls_initiated = []
         
-        for phone_number in phone_numbers:
+        for index, phone_number in enumerate(phone_numbers):
             try:
+                # Add 30-second delay between calls (Bland AI rate limit)
+                if index > 0:
+                    print(f"⏳ Waiting 30 seconds before next call (Bland AI rate limit)...")
+                    await asyncio.sleep(30)
+                
                 # Call Bland AI API to initiate call
                 call_id = await self._initiate_bland_call(phone_number, gym_id)
                 
@@ -83,9 +89,7 @@ class CallService:
             call_id from Bland AI
         """
         if not self.bland_api_key:
-            # For development without API key
-            import uuid
-            return f"test_call_{uuid.uuid4().hex[:12]}"
+            raise Exception("BLAND_AI_API_KEY is not configured. Please set it in your .env file.")
         
         headers = {
             "Authorization": f"Bearer {self.bland_api_key}",
@@ -140,11 +144,8 @@ class CallService:
             call_id = data.get("call_id") or data.get("id") or data.get("call", {}).get("id")
             
             if not call_id:
-                print(f"⚠️ Warning: No call_id in response. Full response: {data}")
-                # Generate fallback ID
-                import uuid
-                call_id = f"call_{uuid.uuid4().hex[:12]}"
-                print(f"📝 Using fallback call_id: {call_id}")
+                print(f"❌ Error: No call_id in response. Full response: {data}")
+                raise Exception(f"Bland AI API did not return a call_id. Response: {data}")
             
             return call_id
             

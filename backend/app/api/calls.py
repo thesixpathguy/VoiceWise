@@ -100,12 +100,10 @@ async def get_call_insights(call_id: str, db: Session = Depends(get_db)):
 
 
 
-
-
 @router.post("/{call_id}/analyze")
 async def analyze_call(call_id: str, db: Session = Depends(get_db)):
     """
-    Manually trigger AI analysis for a call
+    Manually trigger AI analysis for a call and store in Database
     
     - **call_id**: Unique call identifier
     """
@@ -118,7 +116,7 @@ async def analyze_call(call_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Call {call_id} not found")
     
     if not call.raw_transcript:
-        raise HTTPException(status_code=400, detail="No transcript available. Please transcribe the call first.")
+        raise HTTPException(status_code=400, detail="No transcript available. Transcript is received from Bland AI webhook.")
     
     try:
         insights = await insight_service.analyze_and_store_insights(call_id, call.raw_transcript)
