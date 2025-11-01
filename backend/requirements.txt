@@ -17,6 +17,8 @@ python-dotenv==1.0.0
 # HTTP requests
 httpx==0.24.1
 requests==2.31.0
+certifi==2024.2.2
+urllib3<2
 
 # AI/ML
 openai-whisper==20231117

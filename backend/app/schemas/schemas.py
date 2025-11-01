@@ -29,7 +29,6 @@ class CallDetail(BaseModel):
     status: str
     duration_seconds: Optional[int] = None
     created_at: datetime
-    recording_url: Optional[str] = None
     raw_transcript: Optional[str] = None
     
     class Config:
@@ -38,13 +37,15 @@ class CallDetail(BaseModel):
 
 # Webhook Schemas
 class WebhookPayload(BaseModel):
-    """Bland AI webhook payload"""
-    call_id: str
-    phone_number: str
-    recording_url: Optional[str] = None
-    duration: Optional[int] = None
-    status: str
-    transcript_preview: Optional[str] = None
+    """Bland AI webhook payload - flexible to handle various payload structures"""
+    call_id: Optional[str] = Field(None, description="Unique call identifier from Bland AI")
+    to: Optional[str] = Field(None, description="Phone number called (with country code)")
+    call_length: Optional[float] = Field(None, description="Call duration in minutes")
+    status: Optional[str] = Field(None, description="Call status (completed, failed, etc)")
+    concatenated_transcript: Optional[str] = Field(None, description="Full transcript as a single string")
+    
+    class Config:
+        extra = "ignore"  # Allow extra fields from Bland AI
 
 
 # Insight Schemas
@@ -98,8 +99,9 @@ class DashboardSummary(BaseModel):
     """Dashboard summary response"""
     total_calls: int
     sentiment: SentimentDistribution
-    top_pain_points: List[PainPoint]
-    high_interest_quotes: List[HighInterestQuote]
+    top_pain_points: List[PainPoint] = Field(default_factory=list)
+    high_interest_quotes: List[HighInterestQuote] = Field(default_factory=list)
+    revenue_opportunities: int = 0
 
 
 # Health Check

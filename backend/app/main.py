@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db
 from datetime import datetime
+from app.api import calls, webhooks
 
 # Create FastAPI app
 app = FastAPI(
     title="VoiceWise API",
-    description="AI Voice Feedback System for Gym Owners",
+    description="AI-Powered Voice Feedback System - Helping Gym Owners Gather Customer Insights",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -53,11 +54,9 @@ async def health_check():
     }
 
 
-# Import routers (will be added in next phase)
-# from app.api import calls, webhooks, dashboard
-# app.include_router(calls.router, prefix="/api/calls", tags=["calls"])
-# app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
-# app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+# Include API routers
+app.include_router(calls.router, prefix="/api")
+app.include_router(webhooks.router, prefix="/api")
 
 
 if __name__ == "__main__":
