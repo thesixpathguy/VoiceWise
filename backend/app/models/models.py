@@ -38,6 +38,7 @@ class Insight(Base):
     pain_points = Column(ARRAY(Text), nullable=True)  # Customer complaints/issues
     opportunities = Column(ARRAY(Text), nullable=True)  # Upsell opportunities
     revenue_interest = Column(Boolean, nullable=True, index=True)  # Interest in premium services
+    revenue_interest_quote = Column(Text, nullable=True)  # Exact quote showing revenue interest
     confidence = Column(Float, nullable=True)  # AI confidence score (0.0-1.0)
     extracted_at = Column(TIMESTAMP, server_default=func.now(), index=True)
     

@@ -1,6 +1,7 @@
 import json
 from app.schemas.schemas import InsightData
 from app.core.config import settings
+from app.prompts.insight_extraction import INSIGHT_EXTRACTION_PROMPT
 
 
 class AIService:
@@ -36,7 +37,7 @@ class AIService:
         
         try:
             print(f"🤖 Calling Groq API for insight extraction...")
-            prompt = self._build_insight_prompt(transcript)
+            prompt = INSIGHT_EXTRACTION_PROMPT(transcript)
             
             headers = {
                 "Authorization": f"Bearer {self.groq_api_key}",
@@ -99,6 +100,7 @@ class AIService:
                 pain_points=insights_dict.get("pain_points", []),
                 opportunities=insights_dict.get("opportunities", []),
                 capital_interest=insights_dict.get("capital_interest", False),
+                revenue_interest_quote=insights_dict.get("revenue_interest_quote"),
                 confidence=insights_dict.get("confidence", 0.5)
             )
         
@@ -113,34 +115,3 @@ class AIService:
         except Exception as e:
             print(f"❌ Insight extraction error: {str(e)}")
             raise
-    
-    def _build_insight_prompt(self, transcript: str) -> str:
-        """Build the prompt for insight extraction"""
-        return f"""
-Analyze this customer feedback call from a gym member and extract structured insights.
-
-TRANSCRIPT:
-{transcript}
-
-Extract the following information and return as JSON:
-
-{{
-    "main_topics": [list of 2-5 main topics discussed in the feedback],
-    "sentiment": "positive" | "neutral" | "negative",
-    "pain_points": [list of specific complaints, concerns, or issues mentioned by the member],
-    "opportunities": [list of suggested improvements, requested services, or upsell opportunities],
-    "capital_interest": true/false (indicates interest in premium services, personal training, or higher-tier memberships),
-    "confidence": 0.0-1.0 (your confidence in the analysis)
-}}
-
-Guidelines:
-- Be specific and extract actual feedback mentioned, not generic assumptions
-- Sentiment should reflect the member's overall satisfaction with the gym
-- Pain points include any complaints, concerns, or dissatisfaction expressed
-- Opportunities include service requests, improvement suggestions, or interest in upgrades
-- Capital interest means interest in premium/paid services (personal training, nutrition plans, upgraded memberships)
-- Confidence should reflect clarity of the conversation and information quality
-- Return valid JSON only, no additional text
-
-JSON:
-"""

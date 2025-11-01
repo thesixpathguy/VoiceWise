@@ -19,8 +19,9 @@ export const callsAPI = {
     return response.data;
   },
 
-  // List calls
+  // List calls with optional filters
   listCalls: async (params = {}) => {
+    // params can include: gym_id, status, sentiment, pain_point, revenue_interest, limit, skip
     const response = await api.get('/api/calls', { params });
     return response.data;
   },

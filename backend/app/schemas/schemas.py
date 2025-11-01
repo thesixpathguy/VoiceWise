@@ -65,6 +65,7 @@ class InsightData(BaseModel):
     pain_points: List[str] = Field(default_factory=list)
     opportunities: List[str] = Field(default_factory=list)
     capital_interest: bool = False
+    revenue_interest_quote: Optional[str] = None
     confidence: float = 0.0
 
 
@@ -107,6 +108,7 @@ class HighInterestQuote(BaseModel):
     quote: str
     sentiment: str
     phone_number: str
+    call_id: str
 
 
 # Service -> API -> Client
