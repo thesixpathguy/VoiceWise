@@ -56,6 +56,13 @@ export const callsAPI = {
     const response = await api.get('/api/calls/dashboard/summary', { params });
     return response.data;
   },
+
+  // Search calls (hybrid: phone, status, sentiment, NLP)
+  searchCalls: async (params = {}) => {
+    // params: { query, search_type, gym_id, limit, skip }
+    const response = await api.get('/api/calls/search', { params });
+    return response.data;
+  },
 };
 
 // Health check

@@ -22,6 +22,8 @@ urllib3<2
 
 # AI/ML
 groq==0.4.0
+sentence-transformers==2.7.0  # Free embeddings (all-MiniLM-L6-v2)
+pgvector==0.2.4  # PostgreSQL vector extension
 
 # Data validation
 pydantic==2.5.0

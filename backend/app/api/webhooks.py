@@ -6,6 +6,8 @@ from app.core.database import get_db
 from app.schemas.schemas import WebhookPayload
 from app.services.call_service import CallService
 from app.services.insight_service import InsightService
+from app.services.search_service import SearchService
+from app.models.models import Call
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
@@ -58,9 +60,11 @@ async def bland_ai_webhook(
         
         if should_process:
             insight_service = InsightService(db)
+            search_service = SearchService(db)
             background_tasks.add_task(
                 _process_call_completion,
                 insight_service,
+                search_service,
                 payload.call_id,
                 payload.concatenated_transcript
             )
@@ -82,16 +86,19 @@ async def bland_ai_webhook(
 
 async def _process_call_completion(
     insight_service: InsightService,
+    search_service: SearchService,
     call_id: str,
     transcript: str
 ) -> None:
     """
     Background task to process completed call.
     
-    Extracts insights from the transcript using AI analysis.
+    Extracts insights from the transcript using AI analysis and generates
+    embeddings for semantic search.
     
     Args:
         insight_service: Service for insight extraction
+        search_service: Service for embedding generation
         call_id: Unique identifier for the call
         transcript: The call transcript text
     """
@@ -101,6 +108,26 @@ async def _process_call_completion(
         
         # Extract insights from transcript
         await insight_service.analyze_and_store_insights(call_id, transcript)
+        
+        # Generate embedding for semantic search
+        print(f"🔍 Generating embedding for call {call_id}...")
+        embedding = search_service.generate_embedding(transcript)
+        
+        if embedding:
+            # Update call with embedding
+            call = search_service.db.query(Call).filter(
+                Call.call_id == call_id
+            ).first()
+            
+            if call:
+                call.transcript_embedding = embedding
+                search_service.db.commit()
+                print(f"✅ Embedding saved for call {call_id}")
+            else:
+                print(f"⚠️ Call {call_id} not found for embedding update")
+        else:
+            print(f"⚠️ Failed to generate embedding for call {call_id}")
+        
         print(f"✅ Call {call_id} processed successfully")
         
     except Exception as e:

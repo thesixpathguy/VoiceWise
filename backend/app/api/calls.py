@@ -11,6 +11,7 @@ from app.schemas.schemas import (
 )
 from app.services.call_service import CallService
 from app.services.insight_service import InsightService
+from app.services.search_service import SearchService
 
 router = APIRouter(prefix="/calls", tags=["Calls"])
 
@@ -74,6 +75,49 @@ async def list_calls(
         return calls
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve calls: {str(e)}")
+
+
+@router.get("/search")
+async def search_calls(
+    query: str = Query(..., description="Search query"),
+    search_type: str = Query("nlp", description="Search type: phone, status, sentiment, nlp"),
+    gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
+    skip: int = Query(0, ge=0, description="Number of results to skip"),
+    db: Session = Depends(get_db)
+):
+    """
+    Hybrid search for calls
+    
+    - **query**: Search query (phone number, status, sentiment value, or NLP query)
+    - **search_type**: Type of search
+        - `phone`: Search by phone number (exact or partial match)
+        - `status`: Filter by call status (completed, initiated, failed)
+        - `sentiment`: Filter by sentiment (positive, neutral, negative)
+        - `nlp`: Semantic search using NLP (e.g., "need trainer", "equipment issues")
+    - **gym_id**: Optional gym filter
+    - **limit**: Max number of results (1-100)
+    - **skip**: Pagination offset
+    
+    Returns aggregated insights and individual call results
+    """
+    search_service = SearchService(db)
+    
+    try:
+        results = search_service.search_calls(
+            query=query,
+            search_type=search_type,
+            gym_id=gym_id,
+            limit=limit,
+            skip=skip,
+            similarity_threshold=0.77  # Fixed threshold: balanced relevance
+        )
+        return results
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Search error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
 @router.get("/{call_id}", response_model=CallDetail)

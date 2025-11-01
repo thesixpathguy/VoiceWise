@@ -3,6 +3,7 @@ import './App.css'
 import Dashboard from './components/Dashboard'
 import CallsList from './components/CallsList'
 import InitiateCalls from './components/InitiateCalls'
+import SearchPage from './components/SearchPage'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home')
@@ -15,6 +16,8 @@ function App() {
         return <CallsList />
       case 'initiate':
         return <InitiateCalls />
+      case 'search':
+        return <SearchPage />
       default:
         return <HomePage setCurrentPage={setCurrentPage} />
     }
@@ -77,6 +80,16 @@ function App() {
                 }`}
               >
                 Initiate
+              </button>
+              <button
+                onClick={() => setCurrentPage('search')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  currentPage === 'search'
+                    ? 'bg-primary-500 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                Search
               </button>
             </nav>
           </div>
