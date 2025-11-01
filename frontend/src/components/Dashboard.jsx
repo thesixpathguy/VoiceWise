@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
 import { callsAPI } from '../api/api';
+import FilteredCallsModal from './FilteredCallsModal';
 
-export default function Dashboard() {
+export default function Dashboard({ setCurrentPage }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filterModal, setFilterModal] = useState({
+    isOpen: false,
+    type: null,
+    value: null,
+    label: '',
+    callId: null
+  });
 
   useEffect(() => {
     loadDashboard();
@@ -53,6 +61,14 @@ export default function Dashboard() {
 
   const totalSentiment = summary.sentiment.positive + summary.sentiment.neutral + summary.sentiment.negative;
 
+  const openFilterModal = (type, value, label, callId = null) => {
+    setFilterModal({ isOpen: true, type, value, label, callId });
+  };
+
+  const closeFilterModal = () => {
+    setFilterModal({ isOpen: false, type: null, value: null, label: '', callId: null });
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
@@ -64,7 +80,10 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {/* Total Calls */}
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
+        <div 
+          onClick={() => setCurrentPage('calls')}
+          className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 cursor-pointer hover:bg-gray-800 transition-all"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400 text-sm">Total Calls</span>
             <span className="text-2xl">📞</span>
@@ -73,7 +92,10 @@ export default function Dashboard() {
         </div>
 
         {/* Positive Sentiment */}
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6">
+        <div 
+          onClick={() => openFilterModal('sentiment', 'positive', `Positive Sentiment Calls (${summary.sentiment.positive})`)}
+          className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 cursor-pointer hover:bg-green-500/20 transition-all"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400 text-sm">Positive</span>
             <span className="text-2xl">😊</span>
@@ -87,7 +109,10 @@ export default function Dashboard() {
         </div>
 
         {/* Negative Sentiment */}
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
+        <div 
+          onClick={() => openFilterModal('sentiment', 'negative', `Negative Sentiment Calls (${summary.sentiment.negative})`)}
+          className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 cursor-pointer hover:bg-red-500/20 transition-all"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400 text-sm">Negative</span>
             <span className="text-2xl">😞</span>
@@ -101,7 +126,10 @@ export default function Dashboard() {
         </div>
 
         {/* Revenue Opportunities */}
-        <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-6">
+        <div 
+          onClick={() => openFilterModal('revenue_interest', true, `Revenue Opportunity Calls (${summary.revenue_opportunities})`)}
+          className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-6 cursor-pointer hover:bg-primary-500/20 transition-all"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400 text-sm">Opportunities</span>
             <span className="text-2xl">💰</span>
@@ -121,7 +149,11 @@ export default function Dashboard() {
           {summary.top_pain_points && summary.top_pain_points.length > 0 ? (
             <div className="space-y-3">
               {summary.top_pain_points.map((point, index) => (
-                <div key={index} className="flex items-center justify-between">
+                <div 
+                  key={index} 
+                  onClick={() => openFilterModal('pain_point', point.name, `Pain Point: ${point.name} (${point.count} calls)`)}
+                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 cursor-pointer transition-all"
+                >
                   <span className="text-gray-300">{point.name}</span>
                   <span className="px-3 py-1 bg-primary-500/20 text-primary-400 rounded-full text-sm font-medium">
                     {point.count}
@@ -143,7 +175,11 @@ export default function Dashboard() {
           {summary.high_interest_quotes && summary.high_interest_quotes.length > 0 ? (
             <div className="space-y-4">
               {summary.high_interest_quotes.map((quote, index) => (
-                <div key={index} className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+                <div 
+                  key={index} 
+                  onClick={() => openFilterModal('call_id', quote.call_id, `Call: ${quote.phone_number}`, quote.call_id)}
+                  className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-800/50 transition-all"
+                >
                   <p className="text-gray-300 text-sm mb-2 italic">"{quote.quote}"</p>
                   <div className="flex items-center justify-between">
                     <span className={`text-xs px-2 py-1 rounded ${
@@ -153,7 +189,7 @@ export default function Dashboard() {
                     }`}>
                       {quote.sentiment}
                     </span>
-                    <span className="text-xs text-gray-500">***{quote.phone_number}</span>
+                    <span className="text-xs text-gray-500">{quote.phone_number}</span>
                   </div>
                 </div>
               ))}
@@ -163,6 +199,16 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Filtered Calls Modal */}
+      <FilteredCallsModal
+        isOpen={filterModal.isOpen}
+        onClose={closeFilterModal}
+        filterType={filterModal.type}
+        filterValue={filterModal.value}
+        filterLabel={filterModal.label}
+        specificCallId={filterModal.callId}
+      />
     </div>
   );
 }

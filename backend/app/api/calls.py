@@ -41,7 +41,10 @@ async def initiate_calls(
 @router.get("", response_model=List[CallDetail])
 async def list_calls(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: Optional[str] = Query(None, description="Filter by call status"),
+    sentiment: Optional[str] = Query(None, description="Filter by sentiment (positive, neutral, negative)"),
+    pain_point: Optional[str] = Query(None, description="Filter by specific pain point"),
+    revenue_interest: Optional[bool] = Query(None, description="Filter by revenue interest"),
     limit: int = Query(50, ge=1, le=100, description="Number of calls to return"),
     skip: int = Query(0, ge=0, description="Number of calls to skip"),
     db: Session = Depends(get_db)
@@ -51,6 +54,9 @@ async def list_calls(
     
     - **gym_id**: Filter calls by gym
     - **status**: Filter by call status
+    - **sentiment**: Filter by sentiment (positive, neutral, negative)
+    - **pain_point**: Filter by specific pain point
+    - **revenue_interest**: Filter by revenue interest (true/false)
     - **limit**: Max number of results (1-100)
     - **skip**: Pagination offset
     """
@@ -59,6 +65,9 @@ async def list_calls(
         calls = call_service.get_calls(
             gym_id=gym_id,
             status=status,
+            sentiment=sentiment,
+            pain_point=pain_point,
+            revenue_interest=revenue_interest,
             limit=limit,
             skip=skip
         )

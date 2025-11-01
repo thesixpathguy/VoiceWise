@@ -50,6 +50,7 @@ class InsightService:
             existing_insight.pain_points = insights_data.pain_points
             existing_insight.opportunities = insights_data.opportunities
             existing_insight.revenue_interest = insights_data.capital_interest
+            existing_insight.revenue_interest_quote = insights_data.revenue_interest_quote
             existing_insight.confidence = insights_data.confidence
             existing_insight.extracted_at = datetime.utcnow()
             
@@ -64,6 +65,7 @@ class InsightService:
                 pain_points=insights_data.pain_points,
                 opportunities=insights_data.opportunities,
                 revenue_interest=insights_data.capital_interest,
+                revenue_interest_quote=insights_data.revenue_interest_quote,
                 confidence=insights_data.confidence
             )
             
@@ -211,15 +213,20 @@ class InsightService:
         
         quotes = []
         for insight, call in results:
-            # Extract a meaningful quote from transcript (first 200 chars)
-            transcript = call.raw_transcript or ""
-            quote_text = transcript[:200] + "..." if len(transcript) > 200 else transcript
+            # Use the AI-extracted revenue interest quote if available
+            if insight.revenue_interest_quote:
+                quote_text = insight.revenue_interest_quote
+            else:
+                # Fallback: use first 200 chars of transcript if quote not available
+                transcript = call.raw_transcript or ""
+                quote_text = transcript[:200] + "..." if len(transcript) > 200 else transcript
             
             quotes.append(
                 HighInterestQuote(
                     quote=quote_text,
                     sentiment=insight.sentiment,
-                    phone_number=call.phone_number[-4:]  # Last 4 digits for privacy
+                    phone_number=call.phone_number,  # Full phone number
+                    call_id=call.call_id
                 )
             )
         

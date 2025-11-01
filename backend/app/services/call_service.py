@@ -8,6 +8,7 @@ from app.models.models import Call
 from app.schemas.schemas import CallResponse, CallInitiateResponse, WebhookPayload
 from app.services.ai_service import AIService
 from app.core.config import settings
+from app.prompts.call_script import CALL_SCRIPT_PROMPT
 
 
 class CallService:
@@ -98,7 +99,7 @@ class CallService:
         
         payload = {
             "phone_number": phone_number,
-            "task": self._get_call_script(),
+            "task": CALL_SCRIPT_PROMPT,
             "voice": "maya",  # Voice selection
             "max_duration": 180,  # 180 sec max
             "metadata": {
@@ -161,55 +162,61 @@ class CallService:
             print(f"❌ Bland AI API error: {str(e)}")
             raise
     
-    def _get_call_script(self) -> str:
-        """Get the AI agent script for calls"""
-        return """
-        You are a friendly customer service representative calling gym members on behalf of their gym using VoiceWise.
-        
-        Your goal is to have a natural conversation and gather feedback about their gym experience.
-        
-        Key topics to explore:
-        1. Overall satisfaction with the gym facilities and services
-        2. Quality of equipment and cleanliness
-        3. Experience with staff and trainers
-        4. Interest in additional services (personal training, classes, nutrition counseling)
-        5. Any concerns, suggestions, or improvements they'd like to see
-        6. Their fitness goals and how the gym is helping them achieve them
-        
-        Be conversational, empathetic, and genuinely interested in their experience.
-        Ask open-ended questions and let them share their thoughts freely.
-        Keep the conversation under 3 minutes.
-        Thank them for being a valued member.
-        
-        Start by introducing yourself, mentioning you're calling from their gym to check in on their experience and gather feedback.
-        """
-    
     def get_calls(
         self,
         gym_id: Optional[str] = None,
         status: Optional[str] = None,
+        sentiment: Optional[str] = None,
+        pain_point: Optional[str] = None,
+        revenue_interest: Optional[bool] = None,
         limit: int = 50,
         skip: int = 0
     ) -> List[Call]:
         """
-        Retrieve calls with optional filtering
+        Retrieve calls with optional filtering including insights-based filters
         
         Args:
             gym_id: Filter by gym
             status: Filter by status
+            sentiment: Filter by sentiment (positive, neutral, negative)
+            pain_point: Filter by specific pain point
+            revenue_interest: Filter by revenue interest
             limit: Max results
             skip: Pagination offset
         
         Returns:
             List of Call objects
         """
+        from app.models.models import Insight
+        
+        # Start with base query
         query = self.db.query(Call)
         
+        # Apply basic filters
         if gym_id:
             query = query.filter(Call.gym_id == gym_id)
         
         if status:
             query = query.filter(Call.status == status)
+        
+        # Apply insight-based filters (requires JOIN)
+        if sentiment or pain_point or revenue_interest is not None:
+            query = query.join(Insight, Call.call_id == Insight.call_id)
+            
+            if sentiment:
+                query = query.filter(Insight.sentiment == sentiment)
+            
+            if pain_point:
+                # Filter where pain_points array contains the specified pain point (case-insensitive)
+                # Convert to lowercase to match how pain points are stored
+                from sqlalchemy import any_
+                
+                pain_point_lower = pain_point.lower().strip()
+                # Use PostgreSQL's ANY operator for array containment check
+                query = query.filter(Insight.pain_points.any(pain_point_lower))
+            
+            if revenue_interest is not None:
+                query = query.filter(Insight.revenue_interest == revenue_interest)
         
         query = query.order_by(Call.created_at.desc())
         query = query.offset(skip).limit(limit)

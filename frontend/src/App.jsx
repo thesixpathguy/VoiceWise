@@ -10,7 +10,7 @@ function App() {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard />
+        return <Dashboard setCurrentPage={setCurrentPage} />
       case 'calls':
         return <CallsList />
       case 'initiate':
