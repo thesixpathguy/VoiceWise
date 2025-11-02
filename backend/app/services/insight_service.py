@@ -47,6 +47,7 @@ class InsightService:
             # Update existing insights
             existing_insight.topics = insights_data.main_topics
             existing_insight.sentiment = insights_data.sentiment
+            existing_insight.gym_rating = insights_data.gym_rating
             existing_insight.pain_points = insights_data.pain_points
             existing_insight.opportunities = insights_data.opportunities
             existing_insight.revenue_interest = insights_data.capital_interest
@@ -62,6 +63,7 @@ class InsightService:
                 call_id=call_id,
                 topics=insights_data.main_topics,
                 sentiment=insights_data.sentiment,
+                gym_rating=insights_data.gym_rating,
                 pain_points=insights_data.pain_points,
                 opportunities=insights_data.opportunities,
                 revenue_interest=insights_data.capital_interest,

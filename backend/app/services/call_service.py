@@ -100,7 +100,7 @@ class CallService:
         payload = {
             "phone_number": phone_number,
             "task": CALL_SCRIPT_PROMPT,
-            "voice": "maya",  # Voice selection
+            "voice": "josh",  # Voice selection
             "max_duration": 180,  # 180 sec max
             "metadata": {
                 "gym_id": gym_id

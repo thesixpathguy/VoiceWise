@@ -62,6 +62,7 @@ class InsightData(BaseModel):
     """Extracted insights data"""
     main_topics: List[str] = Field(default_factory=list)
     sentiment: str = "neutral"
+    gym_rating: Optional[int] = Field(None, ge=1, le=10, description="Gym rating 1-10 if mentioned")
     pain_points: List[str] = Field(default_factory=list)
     opportunities: List[str] = Field(default_factory=list)
     capital_interest: bool = False
@@ -75,6 +76,7 @@ class InsightResponse(BaseModel):
     call_id: str
     topics: List[str]
     sentiment: str
+    gym_rating: Optional[int] = Field(None, ge=1, le=10, description="Gym rating 1-10 if mentioned")
     pain_points: List[str]
     opportunities: List[str]
     revenue_interest: bool
@@ -131,3 +133,76 @@ class HealthCheck(BaseModel):
     environment: str
     database: str
     timestamp: datetime
+
+
+# Search Schemas
+
+# Service -> API -> Client (part of SearchResponse)
+class SearchSentimentDistribution(BaseModel):
+    """Sentiment distribution in search results"""
+    positive: int = 0
+    neutral: int = 0
+    negative: int = 0
+
+
+# Service -> API -> Client (part of SearchResponse)
+class SearchTopic(BaseModel):
+    """Topic with count in search results"""
+    name: str
+    count: int
+
+
+# Service -> API -> Client (part of SearchResponse)
+class SearchPainPoint(BaseModel):
+    """Pain point with count in search results"""
+    name: str
+    count: int
+
+
+# Service -> API -> Client (part of SearchResponse)
+class SearchAggregatedInsights(BaseModel):
+    """Aggregated insights from search results"""
+    total_calls: int
+    sentiment_distribution: SearchSentimentDistribution
+    top_topics: List[SearchTopic] = Field(default_factory=list)
+    top_pain_points: List[SearchPainPoint] = Field(default_factory=list)
+    revenue_interest_count: int = 0
+    average_confidence: float = 0.0
+    total_duration_seconds: int = 0
+
+
+# Service -> API -> Client (part of SearchResponse)
+class SearchCallInsights(BaseModel):
+    """Insights for a call in search results"""
+    sentiment: Optional[str] = None
+    topics: List[str] = Field(default_factory=list)
+    gym_rating: Optional[int] = None
+    pain_points: List[str] = Field(default_factory=list)
+    opportunities: List[str] = Field(default_factory=list)
+    revenue_interest: bool = False
+    revenue_interest_quote: Optional[str] = None
+    confidence: float = 0.0
+    extracted_at: Optional[str] = None  # ISO format string
+
+
+# Service -> API -> Client (part of SearchResponse)
+class SearchCallResult(BaseModel):
+    """Call result in search response"""
+    call_id: str
+    phone_number: str
+    status: str
+    created_at: str  # ISO format string
+    duration_seconds: Optional[int] = None
+    raw_transcript: Optional[str] = None
+    gym_id: Optional[str] = None
+    insights: Optional[SearchCallInsights] = None
+
+
+# Service -> API -> Client
+class SearchResponse(BaseModel):
+    """Search response with aggregated insights and call results"""
+    query: str
+    search_type: str
+    total_results: int
+    aggregated_insights: SearchAggregatedInsights
+    calls: List[SearchCallResult] = Field(default_factory=list)

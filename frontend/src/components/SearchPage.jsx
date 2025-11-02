@@ -198,7 +198,7 @@ export default function SearchPage() {
           {results.aggregated_insights && results.aggregated_insights.total_calls > 0 && (
             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
               <h2 className="text-xl font-bold text-white mb-4">
-                📊 Aggregated Insights ({results.total_results} calls found)
+                📊 Aggregated Insights ({results.total_results} calls found with {results.aggregated_insights.total_duration_seconds} seconds of total duration)
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -422,6 +422,41 @@ export default function SearchPage() {
                           {insights.sentiment}
                         </span>
                       </div>
+
+                      {/* Gym Rating */}
+                      {(insights.gym_rating || (selectedCall.insights && selectedCall.insights.gym_rating)) && (
+                        <div>
+                          <span className="text-gray-400 text-sm block mb-1">Gym Rating</span>
+                          <div className="flex items-center gap-2">
+                            <div className={`text-2xl font-bold ${
+                              (insights.gym_rating || selectedCall.insights?.gym_rating) >= 8 ? 'text-green-400' :
+                              (insights.gym_rating || selectedCall.insights?.gym_rating) >= 5 ? 'text-yellow-400' :
+                              'text-red-400'
+                            }`}>
+                              {insights.gym_rating || selectedCall.insights?.gym_rating}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                                  <span
+                                    key={star}
+                                    className={`text-sm ${
+                                      star <= (insights.gym_rating || selectedCall.insights?.gym_rating)
+                                        ? (insights.gym_rating || selectedCall.insights?.gym_rating) >= 8 ? 'text-green-400' :
+                                          (insights.gym_rating || selectedCall.insights?.gym_rating) >= 5 ? 'text-yellow-400' :
+                                          'text-red-400'
+                                        : 'text-gray-600'
+                                    }`}
+                                  >
+                                    {star <= (insights.gym_rating || selectedCall.insights?.gym_rating) ? '★' : '☆'}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">out of 10</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Topics */}
                       {insights.topics && insights.topics.length > 0 && (

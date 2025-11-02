@@ -230,6 +230,41 @@ export default function CallsList() {
                     </span>
                   </div>
 
+                  {/* Gym Rating */}
+                  {insights.gym_rating && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-400 mb-2">Gym Rating</p>
+                      <div className="flex items-center gap-3">
+                        <div className={`text-3xl font-bold ${
+                          insights.gym_rating >= 8 ? 'text-green-400' :
+                          insights.gym_rating >= 5 ? 'text-yellow-400' :
+                          'text-red-400'
+                        }`}>
+                          {insights.gym_rating}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                              <span
+                                key={star}
+                                className={`text-xl ${
+                                  star <= insights.gym_rating
+                                    ? insights.gym_rating >= 8 ? 'text-green-400' :
+                                      insights.gym_rating >= 5 ? 'text-yellow-400' :
+                                      'text-red-400'
+                                    : 'text-gray-600'
+                                }`}
+                              >
+                                {star <= insights.gym_rating ? '★' : '☆'}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">out of 10</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Topics */}
                   {insights.topics && insights.topics.length > 0 && (
                     <div className="mb-4">

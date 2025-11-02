@@ -247,6 +247,41 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                           </span>
                         </div>
 
+                        {/* Gym Rating */}
+                        {insights.gym_rating && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-400 mb-1">Gym Rating</p>
+                            <div className="flex items-center gap-2">
+                              <div className={`text-2xl font-bold ${
+                                insights.gym_rating >= 8 ? 'text-green-400' :
+                                insights.gym_rating >= 5 ? 'text-yellow-400' :
+                                'text-red-400'
+                              }`}>
+                                {insights.gym_rating}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-0.5">
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                                    <span
+                                      key={star}
+                                      className={`text-sm ${
+                                        star <= insights.gym_rating
+                                          ? insights.gym_rating >= 8 ? 'text-green-400' :
+                                            insights.gym_rating >= 5 ? 'text-yellow-400' :
+                                            'text-red-400'
+                                          : 'text-gray-600'
+                                      }`}
+                                    >
+                                      {star <= insights.gym_rating ? '★' : '☆'}
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5">out of 10</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Topics */}
                         {insights.topics && insights.topics.length > 0 && (
                           <div className="mb-3">

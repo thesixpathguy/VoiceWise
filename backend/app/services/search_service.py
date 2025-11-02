@@ -109,6 +109,7 @@ class SearchService:
                 "insights": {
                     "sentiment": insight.sentiment if insight else None,
                     "topics": insight.topics if insight else [],
+                    "gym_rating": insight.gym_rating if insight else None,
                     "pain_points": insight.pain_points if insight else [],
                     "opportunities": insight.opportunities if insight else [],
                     "revenue_interest": insight.revenue_interest if insight else False,
