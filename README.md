@@ -110,7 +110,7 @@ VoiceWise automates member feedback collection through AI-powered phone calls, t
 - `call_id` (FK, unique)
 - `topics` (array), `sentiment`, `pain_points` (array)
 - `opportunities` (array), `revenue_interest` (boolean)
-- `revenue_interest_quote`, `confidence`
+- `revenue_interest_quote`, `confidence`, `gym rating`
 
 ### System Components
 
