@@ -60,30 +60,51 @@ Transcript: "The gym is great! I've been thinking about hiring a personal traine
 Analysis: Member expressed interest in personal training
 Quote: "I've been thinking about hiring a personal trainer to help me reach my goals faster"
 capital_interest: true
+gym_rating: null
 
 Example 2:
 Transcript: "Everything is fine. The equipment is good and staff is friendly. No complaints from me."
 Analysis: No revenue interest expressed, general satisfaction
 Quote: null
+gym_rating: null
 capital_interest: false
 
 Example 3:
 Transcript: "I love the classes here. Actually, I wanted to ask about your nutrition counseling program. Do you offer that?"
 Analysis: Member inquired about nutrition counseling service
 Quote: "I wanted to ask about your nutrition counseling program"
+gym_rating: null
 capital_interest: true
 
 Example 4:
 Transcript: "The gym is okay but it's too crowded during peak hours. I wish there were more cardio machines."
 Analysis: Complaints about crowding and equipment, no revenue interest
 Quote: null
+gym_rating: null
 capital_interest: false
 
 Example 5:
 Transcript: "I'm really enjoying my membership. I'm thinking of upgrading to the premium plan to get access to the spa and sauna."
 Analysis: Member expressed interest in premium membership upgrade
+gym_rating: null
 Quote: "I'm thinking of upgrading to the premium plan to get access to the spa and sauna"
 capital_interest: true
+
+Example 6:
+Transcript: "I'd give it an 8 out of 10, but honestly the staff has been really rude lately and the equipment is always broken."
+Analysis: Rating is 8 but verbal feedback is very negative - weight both equally
+sentiment: "neutral"  # Conflict resolved by considering both signals
+gym_rating: 8
+Quote: null
+capital_interest: false
+
+Example 7:
+Transcript: "I'd rate it a 4, but actually I've been loving the new yoga classes and the trainers are fantastic!"
+Analysis: Rating is 4 but verbal feedback is positive - weight both equally  
+sentiment: "neutral"  # Conflict resolved
+gym_rating: 4
+capital_interest: true
+Quote: "I've been loving the new yoga classes"
 
 STEP 4 - EXTRACT FROM THIS TRANSCRIPT:
 {transcript}
