@@ -163,13 +163,12 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                     </div>
                     
                     <div className="space-y-1 text-sm">
-                      <p className="text-gray-400">
-                        <span className="font-medium">Call ID:</span> {call.call_id.substring(0, 12)}...
-                      </p>
-                      {call.duration_seconds && (
+                      {call.duration_seconds ? (
                         <p className="text-gray-400">
                           <span className="font-medium">Duration:</span> {Math.floor(call.duration_seconds / 60)}m {call.duration_seconds % 60}s
                         </p>
+                      ) : (
+                        <p className="text-gray-500 text-xs italic">Duration: Not available</p>
                       )}
                       <p className="text-gray-400">
                         <span className="font-medium">Created:</span> {new Date(call.created_at).toLocaleString()}
@@ -187,14 +186,35 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                     
                     {/* Basic Info */}
                     <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-primary-400 mb-2">Information</h4>
-                      <div className="space-y-1 text-sm">
-                        <p className="text-gray-300">
-                          <span className="font-medium text-gray-400">Phone:</span> {selectedCall.phone_number}
-                        </p>
-                        <p className="text-gray-300">
-                          <span className="font-medium text-gray-400">Status:</span> {selectedCall.status}
-                        </p>
+                      <h4 className="text-sm font-semibold text-primary-400 mb-2">Call Information</h4>
+                      <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Phone:</span>
+                          <span className="text-white">{selectedCall.phone_number}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Status:</span>
+                          <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(selectedCall.status)}`}>
+                            {selectedCall.status}
+                          </span>
+                        </div>
+                        {selectedCall.duration_seconds ? (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Duration:</span>
+                            <span className="text-white">
+                              {Math.floor(selectedCall.duration_seconds / 60)}m {selectedCall.duration_seconds % 60}s
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Duration:</span>
+                            <span className="text-gray-500 text-xs italic">Not available</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Created:</span>
+                          <span className="text-white text-xs">{new Date(selectedCall.created_at).toLocaleString()}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -258,11 +278,61 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                           </div>
                         )}
 
+                        {/* Opportunities */}
+                        {insights.opportunities && insights.opportunities.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-400 mb-1">Opportunities</p>
+                            <ul className="space-y-1">
+                              {insights.opportunities.map((opp, index) => (
+                                <li key={index} className="text-gray-300 text-xs">
+                                  • {opp}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         {/* Revenue Interest */}
                         {insights.revenue_interest && (
-                          <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-2">
-                            <p className="text-primary-400 font-medium text-xs flex items-center gap-2">
-                              💰 Revenue Interest Detected
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-400 mb-1">Revenue Interest</p>
+                            <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-2">
+                              <p className="text-primary-400 font-medium text-xs flex items-center gap-2 mb-1">
+                                💰 Revenue Interest Detected
+                              </p>
+                              {insights.revenue_interest_quote && (
+                                <p className="text-primary-300 text-xs italic mt-1">
+                                  "{insights.revenue_interest_quote}"
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Confidence */}
+                        {insights.confidence !== undefined && insights.confidence !== null && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-400 mb-1">Confidence</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="h-full bg-primary-500 transition-all"
+                                  style={{ width: `${insights.confidence * 100}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-white text-xs font-medium">
+                                {(insights.confidence * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Extracted At */}
+                        {insights.extracted_at && (
+                          <div>
+                            <p className="text-xs text-gray-400 mb-1">Analysis Date</p>
+                            <p className="text-gray-300 text-xs">
+                              {new Date(insights.extracted_at).toLocaleString()}
                             </p>
                           </div>
                         )}
