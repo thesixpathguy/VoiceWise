@@ -316,7 +316,7 @@ export default function SearchPage() {
                           )}
                         </div>
                         <p className="text-sm text-gray-400">
-                          {new Date(call.created_at).toLocaleString()} • {call.duration_seconds}s
+                          {new Date(call.created_at).toLocaleString()} • {call.duration_seconds ? `${Math.floor(call.duration_seconds / 60)}m ${call.duration_seconds % 60}s` : 'Duration: N/A'}
                         </p>
                       </div>
                       {call.insights && call.insights.revenue_interest && (
@@ -378,13 +378,22 @@ export default function SearchPage() {
                         {selectedCall.status}
                       </span>
                     </div>
+                    {selectedCall.duration_seconds ? (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Duration:</span>
+                        <span className="text-white">
+                          {Math.floor(selectedCall.duration_seconds / 60)}m {selectedCall.duration_seconds % 60}s
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Duration:</span>
+                        <span className="text-gray-500 text-xs italic">Not available</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Duration:</span>
-                      <span className="text-white">{selectedCall.duration_seconds}s</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Date:</span>
-                      <span className="text-white">{new Date(selectedCall.created_at).toLocaleString()}</span>
+                      <span className="text-gray-400">Created:</span>
+                      <span className="text-white text-xs">{new Date(selectedCall.created_at).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
@@ -452,19 +461,46 @@ export default function SearchPage() {
                         </div>
                       )}
 
-                      {/* Revenue Interest Quote */}
-                      {insights.revenue_interest && insights.revenue_interest_quote && (
+                      {/* Revenue Interest */}
+                      {insights.revenue_interest && (
                         <div>
-                          <span className="text-gray-400 text-sm block mb-1">💰 Revenue Interest Quote:</span>
-                          <p className="text-primary-400 text-sm italic">"{insights.revenue_interest_quote}"</p>
+                          <span className="text-gray-400 text-sm block mb-1">Revenue Interest</span>
+                          <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-2">
+                            <p className="text-primary-400 text-sm font-medium mb-1">💰 Revenue Interest Detected</p>
+                            {insights.revenue_interest_quote && (
+                              <p className="text-primary-300 text-sm italic">"{insights.revenue_interest_quote}"</p>
+                            )}
+                          </div>
                         </div>
                       )}
 
                       {/* Confidence */}
-                      <div>
-                        <span className="text-gray-400 text-sm">Confidence: </span>
-                        <span className="text-white text-sm">{(insights.confidence * 100).toFixed(0)}%</span>
-                      </div>
+                      {insights.confidence !== undefined && insights.confidence !== null && (
+                        <div>
+                          <span className="text-gray-400 text-sm block mb-1">Confidence</span>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
+                              <div
+                                className="h-full bg-primary-500 transition-all"
+                                style={{ width: `${insights.confidence * 100}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-white text-sm font-medium">
+                              {(insights.confidence * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Extracted At */}
+                      {(insights.extracted_at || (selectedCall.insights && selectedCall.insights.extracted_at)) && (
+                        <div>
+                          <span className="text-gray-400 text-sm block mb-1">Analysis Date</span>
+                          <span className="text-white text-sm">
+                            {new Date(insights.extracted_at || selectedCall.insights.extracted_at).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

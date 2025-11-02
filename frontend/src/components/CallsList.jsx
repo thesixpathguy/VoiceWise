@@ -129,13 +129,12 @@ export default function CallsList() {
                 </div>
                 
                 <div className="space-y-2 text-sm">
-                  <p className="text-gray-400">
-                    <span className="font-medium">Call ID:</span> {call.call_id.substring(0, 12)}...
-                  </p>
-                  {call.duration_seconds && (
+                  {call.duration_seconds ? (
                     <p className="text-gray-400">
                       <span className="font-medium">Duration:</span> {Math.floor(call.duration_seconds / 60)}m {call.duration_seconds % 60}s
                     </p>
+                  ) : (
+                    <p className="text-gray-500 text-xs italic">Duration: Not available</p>
                   )}
                   <p className="text-gray-400">
                     <span className="font-medium">Created:</span> {new Date(call.created_at).toLocaleString()}
@@ -170,17 +169,35 @@ export default function CallsList() {
               
               {/* Basic Info */}
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-primary-400 mb-3">Information</h3>
-                <div className="space-y-2 text-sm">
-                  <p className="text-gray-300">
-                    <span className="font-medium text-gray-400">Phone:</span> {selectedCall.phone_number}
-                  </p>
-                  <p className="text-gray-300">
-                    <span className="font-medium text-gray-400">Status:</span> {selectedCall.status}
-                  </p>
-                  <p className="text-gray-300">
-                    <span className="font-medium text-gray-400">Call ID:</span> {selectedCall.call_id}
-                  </p>
+                <h3 className="text-lg font-semibold text-primary-400 mb-3">Call Information</h3>
+                <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Phone:</span>
+                    <span className="text-white">{selectedCall.phone_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Status:</span>
+                    <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(selectedCall.status)}`}>
+                      {selectedCall.status}
+                    </span>
+                  </div>
+                  {selectedCall.duration_seconds ? (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Duration:</span>
+                      <span className="text-white">
+                        {Math.floor(selectedCall.duration_seconds / 60)}m {selectedCall.duration_seconds % 60}s
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Duration:</span>
+                      <span className="text-gray-500 text-xs italic">Not available</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Created:</span>
+                    <span className="text-white text-xs">{new Date(selectedCall.created_at).toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
 
@@ -260,9 +277,45 @@ export default function CallsList() {
 
                   {/* Revenue Interest */}
                   {insights.revenue_interest && (
-                    <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3">
-                      <p className="text-primary-400 font-medium text-sm flex items-center gap-2">
-                        💰 Revenue Interest Detected
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-400 mb-2">Revenue Interest</p>
+                      <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3">
+                        <p className="text-primary-400 font-medium text-sm flex items-center gap-2 mb-2">
+                          💰 Revenue Interest Detected
+                        </p>
+                        {insights.revenue_interest_quote && (
+                          <p className="text-primary-300 text-sm italic mt-2">
+                            "{insights.revenue_interest_quote}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confidence */}
+                  {insights.confidence !== undefined && insights.confidence !== null && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-400 mb-2">Confidence</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full bg-primary-500 transition-all"
+                            style={{ width: `${insights.confidence * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-white text-sm font-medium">
+                          {(insights.confidence * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Extracted At */}
+                  {insights.extracted_at && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-400 mb-1">Analysis Date</p>
+                      <p className="text-gray-300 text-sm">
+                        {new Date(insights.extracted_at).toLocaleString()}
                       </p>
                     </div>
                   )}

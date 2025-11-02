@@ -78,6 +78,7 @@ class InsightResponse(BaseModel):
     pain_points: List[str]
     opportunities: List[str]
     revenue_interest: bool
+    revenue_interest_quote: Optional[str] = None
     confidence: float
     extracted_at: datetime
     

@@ -113,7 +113,8 @@ class SearchService:
                     "opportunities": insight.opportunities if insight else [],
                     "revenue_interest": insight.revenue_interest if insight else False,
                     "revenue_interest_quote": insight.revenue_interest_quote if insight else None,
-                    "confidence": insight.confidence if insight else 0.0
+                    "confidence": insight.confidence if insight else 0.0,
+                    "extracted_at": insight.extracted_at.isoformat() if insight and insight.extracted_at else None
                 } if insight else None
             })
         
