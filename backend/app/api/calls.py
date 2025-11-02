@@ -7,7 +7,8 @@ from app.schemas.schemas import (
     CallInitiateResponse,
     CallDetail,
     InsightResponse,
-    DashboardSummary
+    DashboardSummary,
+    SearchResponse
 )
 from app.services.call_service import CallService
 from app.services.insight_service import InsightService
@@ -77,7 +78,7 @@ async def list_calls(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve calls: {str(e)}")
 
 
-@router.get("/search")
+@router.get("/search", response_model=SearchResponse)
 async def search_calls(
     query: str = Query(..., description="Search query"),
     search_type: str = Query("nlp", description="Search type: phone, status, sentiment, nlp"),

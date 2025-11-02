@@ -97,6 +97,7 @@ class AIService:
             return InsightData(
                 main_topics=insights_dict.get("main_topics", []),
                 sentiment=insights_dict.get("sentiment", "neutral"),
+                gym_rating=insights_dict.get("gym_rating"),
                 pain_points=insights_dict.get("pain_points", []),
                 opportunities=insights_dict.get("opportunities", []),
                 capital_interest=insights_dict.get("capital_interest", False),

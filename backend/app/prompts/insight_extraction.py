@@ -25,11 +25,22 @@ def INSIGHT_EXTRACTION_PROMPT(transcript: str) -> str:
 
 STEP 1 - REASONING (Chain-of-Thought):
 Think through:
-1. What is the overall sentiment of the member?
-2. What topics were discussed in the conversation?
-3. Are there any complaints, concerns, or pain points?
-4. Did the member express interest in paid services or upgrades?
-5. If yes, what EXACT sentence shows this interest?
+1. Did the member provide a gym rating (1-10)? Extract it if mentioned.
+   - Rating 8-10: Suggests POSITIVE sentiment
+   - Rating 5-7: Suggests NEUTRAL sentiment  
+   - Rating 1-4: Suggests NEGATIVE sentiment
+2. Analyze the verbal feedback separately:
+   - Positive words/phrases: compliments, praise, satisfaction, great, awesome, fantastic, wonderful, etc.
+   - Neutral words/phrases: okay, fine, acceptable, average, decent, mediocre, etc.
+   - Negative words/phrases: complaints, dissatisfaction, issues, bad, terrible, horrible, etc.
+3. Determine sentiment with EQUAL WEIGHT to both rating and verbal feedback:
+   - If rating and verbal feedback align (e.g., rating 9 + positive words) → clear sentiment
+   - If rating and verbal feedback conflict (e.g., rating 8 but mentions complaints) → consider both equally and determine overall sentiment
+   - If only rating OR only verbal feedback available → use the available signal
+4. What topics were discussed in the conversation?
+5. Are there any complaints, concerns, or pain points?
+6. Did the member express interest in paid services or upgrades?
+7. If yes, what EXACT sentence shows this interest?
 
 STEP 2 - REVENUE INTEREST DETECTION (Keyword Triggers):
 Look for these indicators in the gym/fitness industry:
@@ -81,12 +92,24 @@ STEP 5 - RETURN STRUCTURED JSON (Structured Output):
 {{
     "main_topics": [list of 2-5 main topics discussed in the feedback],
     "sentiment": "positive" | "neutral" | "negative",
+    "gym_rating": number between 1-10 if mentioned in transcript, or null,
     "pain_points": [list of specific complaints, concerns, or issues mentioned by the member],
     "opportunities": [list of suggested improvements, requested services, or upsell opportunities],
     "capital_interest": true | false,
     "revenue_interest_quote": "exact verbatim sentence from transcript or null",
     "confidence": 0.0-1.0
 }}
+
+IMPORTANT: 
+- Extract the gym rating (1-10) if the member mentioned it
+- Give EQUAL WEIGHT to both the rating and verbal feedback when determining sentiment
+- If rating is 8-10 AND verbal feedback is positive → "positive"
+- If rating is 8-10 BUT verbal feedback is negative/mixed → consider both equally, may be "neutral" or "positive" depending on overall tone
+- If rating is 5-7 OR verbal feedback is mixed/neutral → "neutral"  
+- If rating is 1-4 AND verbal feedback is negative → "negative"
+- If rating is 1-4 BUT verbal feedback is positive → consider both equally, may be "neutral" or "negative" depending on overall tone
+- If only rating OR only verbal feedback available → use the available signal with full weight
+- Balance both signals equally - don't let rating override verbal feedback or vice versa
 
 CRITICAL RULES:
 - revenue_interest_quote MUST be word-for-word from the transcript (no paraphrasing)
