@@ -112,6 +112,30 @@ class RAGService:
         
         return context
     
+    def _calculate_cosine_distance(self, vec1, vec2: List[float]) -> float:
+        """
+        Calculate cosine distance between two vectors (matches pgvector behavior).
+        Returns distance from 0 (identical) to 2 (opposite).
+        Efficiently handles numpy arrays and lists.
+        """
+        # Convert to numpy arrays (handles both lists and arrays efficiently)
+        vec1 = np.asarray(vec1, dtype=np.float32)
+        vec2 = np.asarray(vec2, dtype=np.float32)
+        
+        # Calculate norms
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
+        
+        if norm1 == 0 or norm2 == 0:
+            return 2.0  # Maximum distance for zero vectors
+        
+        # Cosine similarity: dot product / (norm1 * norm2)
+        cosine_sim = np.dot(vec1, vec2) / (norm1 * norm2)
+        
+        # pgvector cosine_distance = 1 - cosine_similarity
+        # This gives range 0 (identical) to 2 (opposite)
+        return float(1 - cosine_sim)
+    
     def _retrieve_similar_calls(
         self,
         transcript_embedding: List[float],
@@ -148,8 +172,12 @@ class RAGService:
                     # Calculate similarity score (invert cosine distance)
                     # cosine_distance ranges from 0 (identical) to 2 (opposite)
                     # Convert to similarity: 1 - (distance / 2)
-                    distance = float(call.transcript_embedding.cosine_distance(transcript_embedding))
-                    similarity = max(0, 1 - (distance / 2))
+                    # Use numpy to calculate since call.transcript_embedding is now a numpy array
+                    if call.transcript_embedding is not None:
+                        distance = self._calculate_cosine_distance(call.transcript_embedding, transcript_embedding)
+                        similarity = max(0, 1 - (distance / 2))
+                    else:
+                        similarity = 0.0
                     
                     similar_calls.append({
                         "call_id": call.call_id,
@@ -259,8 +287,13 @@ class RAGService:
             examples_with_similarity = []
             for insight, call in results:
                 try:
-                    distance = float(call.transcript_embedding.cosine_distance(transcript_embedding))
-                    similarity = max(0, 1 - (distance / 2))
+                    # Use numpy to calculate cosine distance since call.transcript_embedding is a numpy array
+                    if call.transcript_embedding is not None:
+                        distance = self._calculate_cosine_distance(call.transcript_embedding, transcript_embedding)
+                        similarity = max(0, 1 - (distance / 2))
+                    else:
+                        similarity = 0.0
+                    
                     examples_with_similarity.append({
                         "call_id": call.call_id,
                         "rating": insight.gym_rating,  # Can be None
@@ -269,7 +302,8 @@ class RAGService:
                         "confidence": insight.confidence if insight.confidence is not None else 0.0,
                         "similarity": similarity
                     })
-                except:
+                except Exception as e:
+                    print(f"⚠️ Error calculating similarity for call {call.call_id}: {str(e)}")
                     continue
             
             # Sort by similarity and return top
