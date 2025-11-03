@@ -106,12 +106,12 @@ class InsightService:
         
         total_calls = calls_query.count()
         
-        # Get sentiment distribution
-        insights_query = self.db.query(Insight)
+        # Get sentiment distribution - EXCLUDE low confidence insights (confidence < 0.3)
+        insights_query = self.db.query(Insight).filter(Insight.confidence >= 0.3)
         if gym_id:
             insights_query = insights_query.join(Call).filter(Call.gym_id == gym_id)
         
-        # Count sentiments
+        # Count sentiments (only from high-confidence insights)
         positive_count = insights_query.filter(Insight.sentiment == "positive").count()
         neutral_count = insights_query.filter(Insight.sentiment == "neutral").count()
         negative_count = insights_query.filter(Insight.sentiment == "negative").count()
@@ -122,13 +122,13 @@ class InsightService:
             negative=negative_count
         )
         
-        # Get top pain points
+        # Get top pain points (excludes low confidence)
         top_pain_points = self._get_top_pain_points(gym_id)
         
-        # Get high-interest quotes
+        # Get high-interest quotes (excludes low confidence)
         high_interest_quotes = self._get_high_interest_quotes(gym_id)
         
-        # Calculate revenue opportunities
+        # Calculate revenue opportunities (excludes low confidence)
         revenue_opportunities = insights_query.filter(
             Insight.revenue_interest == True
         ).count()
@@ -147,7 +147,7 @@ class InsightService:
         limit: int = 5
     ) -> List[PainPoint]:
         """
-        Get most common pain points across calls
+        Get most common pain points across calls (excludes low confidence insights)
         
         Args:
             gym_id: Optional gym filter
@@ -156,12 +156,13 @@ class InsightService:
         Returns:
             List of PainPoint objects
         """
-        query = self.db.query(Insight)
+        # Filter out low confidence insights (confidence < 0.3)
+        query = self.db.query(Insight).filter(Insight.confidence >= 0.3)
         
         if gym_id:
             query = query.join(Call).filter(Call.gym_id == gym_id)
         
-        # Get all insights with pain points
+        # Get all insights with pain points (only high confidence)
         insights = query.filter(Insight.pain_points.isnot(None)).all()
         
         # Count pain point occurrences
@@ -190,7 +191,7 @@ class InsightService:
         limit: int = 3
     ) -> List[HighInterestQuote]:
         """
-        Get quotes from high-interest calls
+        Get quotes from high-interest calls (excludes low confidence insights)
         
         Args:
             gym_id: Optional gym filter
@@ -199,10 +200,12 @@ class InsightService:
         Returns:
             List of HighInterestQuote objects
         """
+        # Filter out low confidence insights (confidence < 0.3)
         query = self.db.query(Insight, Call).join(
             Call, Insight.call_id == Call.call_id
         ).filter(
             Insight.revenue_interest == True,
+            Insight.confidence >= 0.3,  # Only high confidence insights
             Call.raw_transcript.isnot(None)
         )
         
