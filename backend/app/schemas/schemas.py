@@ -82,6 +82,7 @@ class InsightResponse(BaseModel):
     revenue_interest: bool
     revenue_interest_quote: Optional[str] = None
     confidence: float
+    anomaly_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Statistical anomaly score 0.0-1.0")
     extracted_at: datetime
     
     class Config:
@@ -182,6 +183,7 @@ class SearchCallInsights(BaseModel):
     revenue_interest: bool = False
     revenue_interest_quote: Optional[str] = None
     confidence: float = 0.0
+    anomaly_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Statistical anomaly score 0.0-1.0")
     extracted_at: Optional[str] = None  # ISO format string
 
 

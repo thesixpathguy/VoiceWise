@@ -11,6 +11,8 @@ from app.schemas.schemas import (
     HighInterestQuote
 )
 from app.services.ai_service import AIService
+from app.services.rag_service import RAGService
+from app.services.anomaly_service import AnomalyService
 
 
 class InsightService:
@@ -19,24 +21,63 @@ class InsightService:
     def __init__(self, db: Session):
         self.db = db
         self.ai_service = AIService()
+        self.rag_service = RAGService(db)
+        self.anomaly_service = AnomalyService(db)
     
     async def analyze_and_store_insights(
         self,
         call_id: str,
-        transcript: str
+        transcript: str,
+        transcript_embedding: Optional[List[float]] = None
     ) -> InsightData:
         """
-        Analyze transcript using AI and store insights
+        Analyze transcript using AI with RAG context and store insights
         
         Args:
             call_id: Unique call identifier
             transcript: Call transcript text
+            transcript_embedding: Optional pre-generated embedding to avoid duplicate generation
         
         Returns:
             InsightData with extracted insights
         """
-        # Extract insights using AI
-        insights_data = await self.ai_service.extract_insights(transcript)
+        # Get call info to retrieve gym_id
+        call = self.db.query(Call).filter(Call.call_id == call_id).first()
+        gym_id = call.gym_id if call else None
+        
+        # Retrieve RAG context (similar calls, historical stats, examples)
+        # Pass embedding if available to avoid regenerating it
+        rag_context = None
+        if gym_id:
+            try:
+                print(f"🔍 Retrieving RAG context for call {call_id}...")
+                rag_context = self.rag_service.retrieve_context(transcript, gym_id, top_k=8, transcript_embedding=transcript_embedding)
+                print(f"✅ RAG context retrieved: {len(rag_context.similar_calls)} similar calls, stats available: {bool(rag_context.historical_stats)}")
+            except Exception as e:
+                print(f"⚠️ RAG context retrieval failed: {str(e)}, proceeding without context")
+        
+        # Extract insights using AI with RAG context
+        rag_context_str = rag_context.to_prompt_context() if rag_context else ""
+        insights_data = await self.ai_service.extract_insights(transcript, rag_context_str)
+        
+        # Calculate anomaly score
+        anomaly_score = None
+        if rag_context and gym_id:
+            try:
+                print(f"📊 Calculating anomaly score for call {call_id}...")
+                insights_dict = {
+                    'gym_rating': insights_data.gym_rating,
+                    'sentiment': insights_data.sentiment,
+                    'pain_points': insights_data.pain_points,
+                    'confidence': insights_data.confidence,
+                    'topics': insights_data.main_topics
+                }
+                anomaly_score = self.anomaly_service.calculate_anomaly_score(
+                    insights_dict, rag_context, gym_id
+                )
+                print(f"✅ Anomaly score calculated: {anomaly_score:.3f}")
+            except Exception as e:
+                print(f"⚠️ Anomaly score calculation failed: {str(e)}")
         
         # Check if insights already exist
         existing_insight = self.db.query(Insight).filter(
@@ -53,10 +94,16 @@ class InsightService:
             existing_insight.revenue_interest = insights_data.capital_interest
             existing_insight.revenue_interest_quote = insights_data.revenue_interest_quote
             existing_insight.confidence = insights_data.confidence
+            existing_insight.anomaly_score = anomaly_score
             existing_insight.extracted_at = datetime.utcnow()
             
-            self.db.commit()
-            self.db.refresh(existing_insight)
+            try:
+                self.db.commit()
+                self.db.refresh(existing_insight)
+            except Exception as commit_error:
+                self.db.rollback()
+                print(f"❌ Failed to update insight for {call_id}: {str(commit_error)}")
+                raise  # Re-raise so caller knows it failed
         else:
             # Create new insights
             insight = Insight(
@@ -68,12 +115,18 @@ class InsightService:
                 opportunities=insights_data.opportunities,
                 revenue_interest=insights_data.capital_interest,
                 revenue_interest_quote=insights_data.revenue_interest_quote,
-                confidence=insights_data.confidence
+                confidence=insights_data.confidence,
+                anomaly_score=anomaly_score
             )
             
             self.db.add(insight)
-            self.db.commit()
-            self.db.refresh(insight)
+            try:
+                self.db.commit()
+                self.db.refresh(insight)
+            except Exception as commit_error:
+                self.db.rollback()
+                print(f"❌ Failed to commit insight for {call_id}: {str(commit_error)}")
+                raise  # Re-raise so caller knows it failed
         
         return insights_data
     

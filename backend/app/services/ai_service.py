@@ -11,12 +11,13 @@ class AIService:
         self.groq_api_key = settings.GROQ_API_KEY
         self.groq_api_url = "https://api.groq.com/openai/v1/chat/completions"
     
-    async def extract_insights(self, transcript: str) -> InsightData:
+    async def extract_insights(self, transcript: str, rag_context: str = "") -> InsightData:
         """
-        Extract insights from transcript using Groq LLM
+        Extract insights from transcript using Groq LLM with optional RAG context
         
         Args:
             transcript: Call transcript text
+            rag_context: Optional RAG context string to enhance extraction
         
         Returns:
             InsightData with extracted information
@@ -37,7 +38,22 @@ class AIService:
         
         try:
             print(f"🤖 Calling Groq API for insight extraction...")
-            prompt = INSIGHT_EXTRACTION_PROMPT(transcript)
+            base_prompt = INSIGHT_EXTRACTION_PROMPT(transcript)
+            
+            # Enhance prompt with RAG context if provided
+            if rag_context:
+                prompt = f"""{rag_context}
+
+{base_prompt}
+
+USING THE CONTEXT ABOVE:
+- Ensure consistency with similar past calls when possible - pattern matching, consistency validation
+- Use historical benchmarks to validate your extraction - benchmark comparison, trend awareness
+- Consider the patterns from high-quality examples - few-shot learning, quality reference
+- IMP: However, extract truthfully from the current transcript (don't force alignment)
+"""
+            else:
+                prompt = base_prompt
             
             headers = {
                 "Authorization": f"Bearer {self.groq_api_key}",

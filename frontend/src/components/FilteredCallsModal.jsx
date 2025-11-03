@@ -7,6 +7,9 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
   const [error, setError] = useState(null);
   const [selectedCall, setSelectedCall] = useState(null);
   const [insights, setInsights] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCalls, setTotalCalls] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (isOpen && filterType && filterValue !== null) {
@@ -14,12 +17,13 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       setCalls([]);
       setSelectedCall(null);
       setInsights(null);
+      setCurrentPage(1); // Reset to first page
       
       // If a specific call ID is provided, load just that call
       if (specificCallId) {
         loadSpecificCall(specificCallId);
       } else {
-        loadFilteredCalls();
+        loadFilteredCalls(currentPage);
       }
     }
   }, [isOpen, filterType, filterValue, specificCallId]);
@@ -42,13 +46,17 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
     }
   };
 
-  const loadFilteredCalls = async () => {
+  const loadFilteredCalls = async (page = 1) => {
     try {
       setLoading(true);
       setError(null);
       
+      const skip = (page - 1) * itemsPerPage;
       // Build filter params based on type
-      const params = { limit: 50 };
+      const params = { 
+        limit: itemsPerPage,
+        skip: skip
+      };
       
       if (filterType === 'sentiment') {
         params.sentiment = filterValue;
@@ -60,6 +68,13 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       
       const data = await callsAPI.listCalls(params);
       setCalls(data);
+      
+      // Estimate total based on returned data
+      if (data.length < itemsPerPage) {
+        setTotalCalls(skip + data.length);
+      } else {
+        setTotalCalls(skip + data.length + (data.length === itemsPerPage ? 1 : 0));
+      }
     } catch (err) {
       setError('Failed to load filtered calls');
       console.error(err);
@@ -81,6 +96,19 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
   const handleCallClick = (call) => {
     setSelectedCall(call);
     loadInsights(call.call_id);
+  };
+
+  // Pagination calculations (server-side pagination, skip if only 1 call from specificCallId)
+  const totalPages = calls.length <= 1 ? 1 : Math.ceil(totalCalls / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    setSelectedCall(null); // Clear selection when changing pages
+    setInsights(null);
+    if (!specificCallId) {
+      loadFilteredCalls(page); // Load the new page from server
+    }
   };
 
   const getStatusColor = (status) => {
@@ -157,9 +185,16 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-white font-medium">{call.phone_number}</span>
-                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(call.status)}`}>
-                        {call.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score > 0.7 && (
+                          <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium border border-orange-500/30">
+                            ⚠️ Anomaly
+                          </span>
+                        )}
+                        <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(call.status)}`}>
+                          {call.status}
+                        </span>
+                      </div>
                     </div>
                     
                     <div className="space-y-1 text-sm">
@@ -176,6 +211,57 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                     </div>
                   </div>
                 ))}
+                
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-700">
+                    <div className="text-xs text-gray-400">
+                      Showing {startIndex + 1}-{Math.min(startIndex + calls.length, totalCalls)} of {totalCalls} calls
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                          if (
+                            page === 1 ||
+                            page === totalPages ||
+                            (page >= currentPage - 1 && page <= currentPage + 1)
+                          ) {
+                            return (
+                              <button
+                                key={page}
+                                onClick={() => handlePageChange(page)}
+                                className={`px-2 py-1 rounded-lg text-sm transition-colors ${
+                                  currentPage === page
+                                    ? 'bg-primary-500 text-white'
+                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            );
+                          } else if (page === currentPage - 2 || page === currentPage + 2) {
+                            return <span key={page} className="text-gray-500 text-sm">...</span>;
+                          }
+                          return null;
+                        })}
+                      </div>
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Call Details Panel */}
@@ -358,6 +444,39 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                               <span className="text-white text-xs font-medium">
                                 {(insights.confidence * 100).toFixed(0)}%
                               </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Anomaly Score */}
+                        {insights.anomaly_score !== undefined && insights.anomaly_score !== null && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-400 mb-1">Anomaly Score</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className={`h-full transition-all ${
+                                    insights.anomaly_score > 0.7 ? 'bg-orange-500' : 
+                                    insights.anomaly_score > 0.4 ? 'bg-yellow-500' : 
+                                    'bg-gray-500'
+                                  }`}
+                                  style={{ width: `${insights.anomaly_score * 100}%` }}
+                                ></div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-xs font-medium ${
+                                  insights.anomaly_score > 0.7 ? 'text-orange-400' : 
+                                  insights.anomaly_score > 0.4 ? 'text-yellow-400' : 
+                                  'text-gray-400'
+                                }`}>
+                                  {insights.anomaly_score.toFixed(2)}
+                                </span>
+                                {insights.anomaly_score > 0.7 && (
+                                  <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
+                                    Anomaly
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )}

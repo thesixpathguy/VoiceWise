@@ -21,14 +21,14 @@ export default function SearchPage() {
     try {
       setLoading(true);
       setError(null);
-      setResults(null);
-      setSelectedCall(null);
-      setInsights(null);
+        setResults(null);
+        setSelectedCall(null);
+        setInsights(null);
 
       const response = await callsAPI.searchCalls({
         query: query.trim(),
         search_type: searchType,
-        limit: 50
+        limit: 100
       });
 
       setResults(response);
@@ -291,7 +291,7 @@ export default function SearchPage() {
             </h2>
 
             {results.calls && results.calls.length > 0 ? (
-              <div className="space-y-4">
+                <div className="space-y-4">
                 {results.calls.map((call) => (
                   <div
                     key={call.call_id}
@@ -306,6 +306,11 @@ export default function SearchPage() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-white font-medium">{call.phone_number}</span>
+                          {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score > 0.7 && (
+                            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
+                              ⚠️ Anomaly
+                            </span>
+                          )}
                           <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(call.status)}`}>
                             {call.status}
                           </span>
@@ -344,7 +349,7 @@ export default function SearchPage() {
                     )}
                   </div>
                 ))}
-              </div>
+                </div>
             ) : (
               <p className="text-gray-400 text-center py-8">No calls found</p>
             )}
@@ -523,6 +528,40 @@ export default function SearchPage() {
                             <span className="text-white text-sm font-medium">
                               {(insights.confidence * 100).toFixed(0)}%
                             </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Anomaly Score */}
+                      {((insights && insights.anomaly_score !== undefined && insights.anomaly_score !== null) || 
+                        (selectedCall.insights && selectedCall.insights.anomaly_score !== undefined && selectedCall.insights.anomaly_score !== null)) && (
+                        <div>
+                          <span className="text-gray-400 text-sm block mb-1">Anomaly Score</span>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
+                              <div
+                                className={`h-full transition-all ${
+                                  (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.7 ? 'bg-orange-500' : 
+                                  (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.4 ? 'bg-yellow-500' : 
+                                  'bg-gray-500'
+                                }`}
+                                style={{ width: `${((insights?.anomaly_score || selectedCall.insights?.anomaly_score) || 0) * 100}%` }}
+                              ></div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-medium ${
+                                (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.7 ? 'text-orange-400' : 
+                                (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.4 ? 'text-yellow-400' : 
+                                'text-gray-400'
+                              }`}>
+                                {(insights?.anomaly_score || selectedCall.insights?.anomaly_score || 0).toFixed(2)}
+                              </span>
+                              {(insights?.anomaly_score || selectedCall.insights?.anomaly_score || 0) > 0.7 && (
+                                <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
+                                  Anomaly
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )}
