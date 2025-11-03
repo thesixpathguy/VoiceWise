@@ -7,16 +7,37 @@ export default function CallsList() {
   const [error, setError] = useState(null);
   const [selectedCall, setSelectedCall] = useState(null);
   const [insights, setInsights] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCalls, setTotalCalls] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
-    loadCalls();
-  }, []);
+    loadCalls(currentPage);
+  }, [currentPage]);
 
-  const loadCalls = async () => {
+  const loadCalls = async (page = 1) => {
     try {
       setLoading(true);
-      const data = await callsAPI.listCalls({ limit: 50 });
+      const skip = (page - 1) * itemsPerPage;
+      // First, get total count with a larger limit to estimate total (or we could add a count endpoint)
+      // For now, we'll load with a reasonable limit and use pagination
+      const data = await callsAPI.listCalls({ 
+        limit: itemsPerPage, 
+        skip: skip 
+      });
       setCalls(data);
+      
+      // Try to get total count - if API returns it, use it, otherwise estimate
+      // We'll need to make another call to get total or the API should return it
+      // For now, if we get less than limit, we know we're at the end
+      if (data.length < itemsPerPage) {
+        setTotalCalls(skip + data.length);
+      } else {
+        // Estimate: if we got full page, there might be more
+        // To get exact count, we'd need API to return total_count
+        setTotalCalls(skip + data.length + (data.length === itemsPerPage ? 1 : 0));
+      }
+      
       setError(null);
     } catch (err) {
       setError('Failed to load calls');
@@ -39,6 +60,17 @@ export default function CallsList() {
   const handleCallClick = (call) => {
     setSelectedCall(call);
     loadInsights(call.call_id);
+  };
+
+  // Pagination calculations (server-side pagination)
+  const totalPages = Math.ceil(totalCalls / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    setSelectedCall(null); // Clear selection when changing pages
+    setInsights(null);
+    loadCalls(page); // Load the new page from server
   };
 
   const handleAnalyze = async (callId) => {
@@ -111,7 +143,8 @@ export default function CallsList() {
               <p className="text-gray-500 text-sm mt-2">Initiate your first call to get started</p>
             </div>
           ) : (
-            calls.map((call) => (
+            <>
+              {calls.map((call) => (
               <div
                 key={call.call_id}
                 onClick={() => handleCallClick(call)}
@@ -123,9 +156,16 @@ export default function CallsList() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-white font-medium">{call.phone_number}</span>
-                  <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(call.status)}`}>
-                    {call.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score > 0.7 && (
+                      <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium border border-orange-500/30">
+                        ⚠️ Anomaly
+                      </span>
+                    )}
+                    <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(call.status)}`}>
+                      {call.status}
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="space-y-2 text-sm">
@@ -157,7 +197,60 @@ export default function CallsList() {
                   </div>
                 )}
               </div>
-            ))
+            ))}
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-700">
+                <div className="text-sm text-gray-400">
+                  Showing {startIndex + 1}-{Math.min(startIndex + calls.length, totalCalls)} of {totalCalls} calls
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      // Show first page, last page, current page, and pages around current
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => handlePageChange(page)}
+                            className={`px-3 py-2 rounded-lg transition-colors ${
+                              currentPage === page
+                                ? 'bg-primary-500 text-white'
+                                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        );
+                      } else if (page === currentPage - 2 || page === currentPage + 2) {
+                        return <span key={page} className="text-gray-500">...</span>;
+                      }
+                      return null;
+                    })}
+                  </div>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
 
@@ -341,6 +434,39 @@ export default function CallsList() {
                         <span className="text-white text-sm font-medium">
                           {(insights.confidence * 100).toFixed(0)}%
                         </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Anomaly Score */}
+                  {insights.anomaly_score !== undefined && insights.anomaly_score !== null && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-400 mb-2">Anomaly Score</p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${
+                              insights.anomaly_score > 0.7 ? 'bg-orange-500' : 
+                              insights.anomaly_score > 0.4 ? 'bg-yellow-500' : 
+                              'bg-gray-500'
+                            }`}
+                            style={{ width: `${insights.anomaly_score * 100}%` }}
+                          ></div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-medium ${
+                            insights.anomaly_score > 0.7 ? 'text-orange-400' : 
+                            insights.anomaly_score > 0.4 ? 'text-yellow-400' : 
+                            'text-gray-400'
+                          }`}>
+                            {insights.anomaly_score.toFixed(2)}
+                          </span>
+                          {insights.anomaly_score > 0.7 && (
+                            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
+                              Anomaly
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

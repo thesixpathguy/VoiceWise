@@ -43,6 +43,7 @@ class Insight(Base):
     revenue_interest_quote = Column(Text, nullable=True)  # Exact quote showing revenue interest
     gym_rating = Column(Integer, nullable=True, index=True)  # Gym rating 1-10 from member
     confidence = Column(Float, nullable=True)  # AI confidence score (0.0-1.0)
+    anomaly_score = Column(Float, nullable=True, index=True)  # Anomaly score 0.0-1.0 (statistical analysis)
     extracted_at = Column(TIMESTAMP, server_default=func.now(), index=True)
     
     # Relationship to call

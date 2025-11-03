@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.orm import Session
+from typing import Optional, List
 import json
 
 from app.core.database import get_db
@@ -61,12 +62,16 @@ async def bland_ai_webhook(
         if should_process:
             insight_service = InsightService(db)
             search_service = SearchService(db)
+            # Generate embedding once to reuse in insight extraction
+            print(f"🔍 Generating embedding for call {payload.call_id}...")
+            embedding = search_service.generate_embedding(payload.concatenated_transcript)
             background_tasks.add_task(
                 _process_call_completion,
                 insight_service,
                 search_service,
                 payload.call_id,
-                payload.concatenated_transcript
+                payload.concatenated_transcript,
+                embedding
             )
             print(f"✅ Call {payload.call_id} updated, processing scheduled")
         else:
@@ -88,30 +93,33 @@ async def _process_call_completion(
     insight_service: InsightService,
     search_service: SearchService,
     call_id: str,
-    transcript: str
+    transcript: str,
+    embedding: Optional[List[float]] = None
 ) -> None:
     """
     Background task to process completed call.
     
-    Extracts insights from the transcript using AI analysis and generates
+    Extracts insights from the transcript using AI analysis and stores
     embeddings for semantic search.
     
     Args:
         insight_service: Service for insight extraction
-        search_service: Service for embedding generation
+        search_service: Service for embedding storage
         call_id: Unique identifier for the call
         transcript: The call transcript text
+        embedding: Pre-generated embedding to reuse (if None, will generate)
     """
     try:
         print(f"🔄 Processing call {call_id}...")
         print(f"📝 Transcript length: {len(transcript) if transcript else 0} chars")
         
-        # Extract insights from transcript
-        await insight_service.analyze_and_store_insights(call_id, transcript)
+        # Extract insights from transcript (pass embedding to avoid regenerating)
+        await insight_service.analyze_and_store_insights(call_id, transcript, transcript_embedding=embedding)
         
-        # Generate embedding for semantic search
-        print(f"🔍 Generating embedding for call {call_id}...")
-        embedding = search_service.generate_embedding(transcript)
+        # Use provided embedding or generate if not provided
+        if embedding is None:
+            print(f"🔍 Generating embedding for call {call_id}...")
+            embedding = search_service.generate_embedding(transcript)
         
         if embedding:
             # Update call with embedding
