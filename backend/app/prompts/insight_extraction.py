@@ -118,7 +118,7 @@ STEP 5 - RETURN STRUCTURED JSON (Structured Output):
     "opportunities": [list of suggested improvements, requested services, or upsell opportunities],
     "capital_interest": true | false,
     "revenue_interest_quote": "exact verbatim sentence from transcript or null",
-    "confidence": 0.0-1.0
+    "confidence": 0.00-1.00 (rounded to 2 decimal places, e.g., 0.75, 0.92, 0.35)
 }}
 
 IMPORTANT: 
@@ -142,7 +142,31 @@ CRITICAL RULES:
 - Pain points include any complaints, concerns, or dissatisfaction expressed
 - Opportunities include service requests, improvement suggestions, or interest in upgrades
 - Capital interest means interest in premium/paid services (personal training, nutrition plans, upgraded memberships)
-- Confidence should reflect clarity of the conversation and information quality
+
+CONFIDENCE CALCULATION (CRITICAL - Calculate based on conversation quality):
+The confidence score MUST be calculated to 2 decimal places (0.00-1.00, e.g., 0.75, 0.92, 0.35) based on these factors:
+- Transcript length and detail: 
+  * Very short/one-word responses or unclear speech → 0.10-0.40
+  * Brief responses with minimal detail → 0.41-0.60
+  * Good conversation with clear responses → 0.61-0.80
+  * Detailed, comprehensive feedback → 0.80-1.00
+- Clarity and completeness:
+  * Member provided rating AND detailed feedback → higher confidence (0.71-1.00)
+  * Member provided only rating OR only brief feedback → medium confidence (0.41-0.70)
+  * Unclear or incomplete responses → lower confidence (0.20-0.40)
+  * Very poor audio quality or unintelligible transcript → low confidence (0.10-0.35)
+- Information quality:
+  * Specific examples and details mentioned → higher confidence
+  * Vague responses like "it's okay" → lower confidence
+  * Member actively engaged in conversation → higher confidence
+  * Member seemed distracted or uninterested → lower confidence
+
+IMPORTANT: Dont give a default confidence score. Calculate confidence based on actual conversation quality.
+Take weightage from the factors mentioned above.
+For a bad call (poor audio, short responses, unclear feedback), confidence should be 0.2-0.4.
+For a mediocre call, confidence should be 0.5-0.7.
+For a good call, confidence should be 0.8-1.0.
+
 - Return ONLY valid JSON, no additional text or explanations
 
 JSON:"""
