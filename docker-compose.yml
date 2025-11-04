@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  db:
+    # Use an image with pgvector preinstalled so the VECTOR type is available.
+    # ankane/pgvector is a lightweight Postgres image that includes the pgvector extension.
+    image: ankane/pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      # Map container's 5432 to host 5433 to avoid conflict with a local Postgres service
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Run any *.sql files in backend/postgres-init at first initialization to enable extensions
+      - ./backend/postgres-init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  db_data:
