@@ -43,7 +43,7 @@ class AnomalyService:
             rag_context.similar_calls
         )
         if rating_anomaly is not None:
-            anomaly_factors.append(('rating', rating_anomaly, 0.3))
+            anomaly_factors.append(('rating', rating_anomaly, 0.2))
         
         # Factor 2: Sentiment-rating conflict
         sentiment_conflict = self._calculate_sentiment_conflict(
@@ -52,7 +52,7 @@ class AnomalyService:
             rag_context.similar_calls
         )
         if sentiment_conflict is not None:
-            anomaly_factors.append(('sentiment_conflict', sentiment_conflict, 0.3))
+            anomaly_factors.append(('sentiment_conflict', sentiment_conflict, 0.2))
         
         # Factor 3: Pattern deviation (against similar calls)
         pattern_deviation = self._calculate_pattern_deviation(
@@ -69,7 +69,25 @@ class AnomalyService:
             rag_context.similar_calls
         )
         if confidence_anomaly is not None:
-            anomaly_factors.append(('confidence', confidence_anomaly, 0.3))
+            anomaly_factors.append(('confidence', confidence_anomaly, 0.1))
+        
+        # Factor 5: Churn score anomaly (very high churn scores could be anomalous)
+        churn_anomaly = self._calculate_churn_score_anomaly(
+            extracted_insights.get('churn_score'),
+            rag_context.historical_stats,
+            rag_context.similar_calls
+        )
+        if churn_anomaly is not None:
+            anomaly_factors.append(('churn_score', churn_anomaly, 0.2))
+        
+        # Factor 6: Revenue interest score anomaly (very high revenue scores could be anomalous)
+        revenue_anomaly = self._calculate_revenue_score_anomaly(
+            extracted_insights.get('revenue_interest_score'),
+            rag_context.historical_stats,
+            rag_context.similar_calls
+        )
+        if revenue_anomaly is not None:
+            anomaly_factors.append(('revenue_score', revenue_anomaly, 0.2))
         
         # Weighted average of anomaly factors
         if not anomaly_factors:
@@ -244,6 +262,30 @@ class AnomalyService:
             except (AttributeError, TypeError) as e:
                 print(f"⚠️ Error calculating pain points deviation: {str(e)}")
         
+        # Opportunities deviation: proportion of unique/unusual opportunities
+        extracted_opportunities_list = extracted_insights.get('opportunities')
+        if extracted_opportunities_list and isinstance(extracted_opportunities_list, list) and len(extracted_opportunities_list) > 0:
+            try:
+                extracted_opportunities = set([
+                    str(o).lower().strip() for o in extracted_opportunities_list if o
+                ])
+                
+                all_similar_opportunities = set()
+                for c in similar_calls:
+                    similar_opportunities = c.get('opportunities')
+                    if similar_opportunities and isinstance(similar_opportunities, list):
+                        all_similar_opportunities.update([
+                            str(o).lower().strip() for o in similar_opportunities if o
+                        ])
+                
+                if all_similar_opportunities and len(extracted_opportunities) > 0:
+                    # Check how many opportunities are new/unusual
+                    new_opportunities = extracted_opportunities - all_similar_opportunities
+                    deviation_rate = len(new_opportunities) / len(extracted_opportunities)
+                    deviations.append(deviation_rate)
+            except (AttributeError, TypeError) as e:
+                print(f"⚠️ Error calculating opportunities deviation: {str(e)}")
+        
         # Return average deviation (only if we have actual deviations)
         if deviations:
             return sum(deviations) / len(deviations)
@@ -288,6 +330,94 @@ class AnomalyService:
                     return anomaly
             except (ValueError, TypeError) as e:
                 print(f"⚠️ Error calculating confidence anomaly with historical stats: {str(e)}")
+        
+        return None
+    
+    def _calculate_churn_score_anomaly(
+        self,
+        churn_score: Optional[float],
+        historical_stats: Dict[str, Any],
+        similar_calls: List[Dict]
+    ) -> Optional[float]:
+        """Calculate churn score anomaly using Z-score"""
+        if churn_score is None:
+            return None
+        
+        # Use similar calls for comparison
+        if similar_calls:
+            similar_churn_scores = [
+                c.get('churn_score') for c in similar_calls 
+                if c.get('churn_score') is not None and isinstance(c.get('churn_score'), (int, float))
+            ]
+            if len(similar_churn_scores) >= 3:
+                try:
+                    avg_churn = sum(similar_churn_scores) / len(similar_churn_scores)
+                    std_churn = np.std(similar_churn_scores)
+                    
+                    if std_churn > 0:
+                        z_score = abs((churn_score - avg_churn) / std_churn)
+                        # Very high churn scores (>0.8) or very low (<0.2) are more anomalous
+                        # Normalize using sigmoid with threshold 1.35
+                        anomaly = 1 / (1 + np.exp(-max(0, z_score - 1.35)))
+                        return float(anomaly)
+                except (ValueError, TypeError, ZeroDivisionError) as e:
+                    print(f"⚠️ Error calculating churn score anomaly with similar calls: {str(e)}")
+        
+        # Fallback: compare with historical average
+        avg_churn = historical_stats.get('avg_churn_score')
+        if avg_churn is not None and isinstance(avg_churn, (int, float)):
+            try:
+                deviation = abs(churn_score - avg_churn)
+                # If deviation > 0.3, consider anomalous (churn scores are 0-1 range)
+                if deviation > 0.4:
+                    anomaly = min(1.0, deviation / 0.5)  # Normalize to 0-1
+                    return anomaly
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Error calculating churn score anomaly with historical stats: {str(e)}")
+        
+        return None
+    
+    def _calculate_revenue_score_anomaly(
+        self,
+        revenue_score: Optional[float],
+        historical_stats: Dict[str, Any],
+        similar_calls: List[Dict]
+    ) -> Optional[float]:
+        """Calculate revenue interest score anomaly using Z-score"""
+        if revenue_score is None:
+            return None
+        
+        # Use similar calls for comparison
+        if similar_calls:
+            similar_revenue_scores = [
+                c.get('revenue_interest_score') for c in similar_calls 
+                if c.get('revenue_interest_score') is not None and isinstance(c.get('revenue_interest_score'), (int, float))
+            ]
+            if len(similar_revenue_scores) >= 3:
+                try:
+                    avg_revenue = sum(similar_revenue_scores) / len(similar_revenue_scores)
+                    std_revenue = np.std(similar_revenue_scores)
+                    
+                    if std_revenue > 0:
+                        z_score = abs((revenue_score - avg_revenue) / std_revenue)
+                        # Very high revenue scores (>0.8) or very low (<0.2) are more anomalous
+                        # Normalize using sigmoid with threshold 1.35
+                        anomaly = 1 / (1 + np.exp(-max(0, z_score - 1.35)))
+                        return float(anomaly)
+                except (ValueError, TypeError, ZeroDivisionError) as e:
+                    print(f"⚠️ Error calculating revenue score anomaly with similar calls: {str(e)}")
+        
+        # Fallback: compare with historical average
+        avg_revenue = historical_stats.get('avg_revenue_interest_score')
+        if avg_revenue is not None and isinstance(avg_revenue, (int, float)):
+            try:
+                deviation = abs(revenue_score - avg_revenue)
+                # If deviation > 0.3, consider anomalous (revenue scores are 0-1 range)
+                if deviation > 0.4:
+                    anomaly = min(1.0, deviation / 0.5)  # Normalize to 0-1
+                    return anomaly
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Error calculating revenue score anomaly with historical stats: {str(e)}")
         
         return None
 
