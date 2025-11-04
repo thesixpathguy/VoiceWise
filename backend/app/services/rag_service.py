@@ -31,8 +31,26 @@ class RAGContext:
             for i, call in enumerate(self.similar_calls[:5], 1):
                 similar_info = f"{i}. Rating: {call.get('rating', 'N/A')}, "
                 similar_info += f"Sentiment: {call.get('sentiment', 'N/A')}, "
-                similar_info += f"Confidence: {call.get('confidence', 0):.2f}, "
-                similar_info += f"Pain Points: {', '.join(call.get('pain_points', [])) if call.get('pain_points') else 'None'}"
+                similar_info += f"Confidence: {call.get('confidence', 0):.2f}"
+                
+                # Add churn score if available
+                if call.get('churn_score') is not None:
+                    similar_info += f", Churn Score: {call.get('churn_score', 0):.1f}"
+                
+                # Add revenue interest score if available
+                if call.get('revenue_interest_score') is not None:
+                    similar_info += f", Revenue Interest Score: {call.get('revenue_interest_score', 0):.1f}"
+                
+                # Add pain points
+                pain_points = call.get('pain_points', [])
+                if pain_points:
+                    similar_info += f", Pain Points: {', '.join(pain_points)}"
+                
+                # Add opportunities
+                opportunities = call.get('opportunities', [])
+                if opportunities:
+                    similar_info += f", Opportunities: {', '.join(opportunities)}"
+                
                 context_parts.append(similar_info)
             context_parts.append("")
         
@@ -48,6 +66,22 @@ class RAGContext:
             top_pain_points = self.historical_stats.get('top_pain_points')
             if top_pain_points and len(top_pain_points) > 0:
                 context_parts.append(f"- Common Pain Points: {', '.join([p['name'] for p in top_pain_points[:3]])}")
+            
+            # Add top opportunities if available
+            top_opportunities = self.historical_stats.get('top_opportunities')
+            if top_opportunities and len(top_opportunities) > 0:
+                context_parts.append(f"- Common Opportunities: {', '.join([o['name'] for o in top_opportunities[:3]])}")
+            
+            # Add average churn score if available
+            avg_churn_score = self.historical_stats.get('avg_churn_score')
+            if avg_churn_score is not None:
+                context_parts.append(f"- Average Churn Score: {avg_churn_score:.1f}")
+            
+            # Add average revenue interest score if available
+            avg_revenue_score = self.historical_stats.get('avg_revenue_interest_score')
+            if avg_revenue_score is not None:
+                context_parts.append(f"- Average Revenue Interest Score: {avg_revenue_score:.1f}")
+            
             context_parts.append("")
         
         # High-quality examples context
@@ -56,7 +90,31 @@ class RAGContext:
             for i, example in enumerate(self.high_quality_examples[:3], 1):
                 ex_info = f"{i}. Rating: {example.get('rating', 'N/A')}, "
                 ex_info += f"Sentiment: {example.get('sentiment', 'N/A')}, "
-                ex_info += f"Topics: {', '.join(example.get('topics', [])[:3]) if example.get('topics') else 'None'}"
+                ex_info += f"Confidence: {example.get('confidence', 0):.2f}"
+                
+                # Add churn score if available
+                if example.get('churn_score') is not None:
+                    ex_info += f", Churn Score: {example.get('churn_score', 0):.1f}"
+                
+                # Add revenue interest score if available
+                if example.get('revenue_interest_score') is not None:
+                    ex_info += f", Revenue Interest Score: {example.get('revenue_interest_score', 0):.1f}"
+                
+                # Add topics
+                topics = example.get('topics', [])
+                if topics:
+                    ex_info += f", Topics: {', '.join(topics[:3])}"
+                
+                # Add pain points if available
+                pain_points = example.get('pain_points', [])
+                if pain_points:
+                    ex_info += f", Pain Points: {', '.join(pain_points[:2])}"
+                
+                # Add opportunities if available
+                opportunities = example.get('opportunities', [])
+                if opportunities:
+                    ex_info += f", Opportunities: {', '.join(opportunities[:2])}"
+                
                 context_parts.append(ex_info)
             context_parts.append("")
         
@@ -185,7 +243,10 @@ class RAGService:
                         "sentiment": insight.sentiment,  # Can be None
                         "confidence": insight.confidence if insight.confidence is not None else 0.0,  # Default to 0.0 if None
                         "pain_points": insight.pain_points or [],
+                        "opportunities": insight.opportunities or [],
                         "topics": insight.topics or [],
+                        "churn_score": insight.churn_score,  # Can be None
+                        "revenue_interest_score": insight.revenue_interest_score,  # Can be None
                         "similarity_score": similarity
                     })
             
@@ -234,16 +295,39 @@ class RAGService:
                 for name, count in pain_point_counts.most_common(5)
             ]
             
+            # Top opportunities
+            all_opportunities = []
+            for insight in insights:
+                if insight.opportunities:
+                    all_opportunities.extend([o.lower().strip() for o in insight.opportunities])
+            
+            opportunity_counts = Counter(all_opportunities)
+            top_opportunities = [
+                {"name": name.capitalize(), "count": count}
+                for name, count in opportunity_counts.most_common(5)
+            ]
+            
             # Average confidence (only from insights with confidence scores)
             confidences = [i.confidence for i in insights if i.confidence is not None]
             avg_confidence = sum(confidences) / len(confidences) if len(confidences) > 0 else None
+            
+            # Average churn score (only from insights with churn scores)
+            churn_scores = [i.churn_score for i in insights if i.churn_score is not None]
+            avg_churn_score = sum(churn_scores) / len(churn_scores) if len(churn_scores) > 0 else None
+            
+            # Average revenue interest score (only from insights with revenue scores)
+            revenue_scores = [i.revenue_interest_score for i in insights if i.revenue_interest_score is not None]
+            avg_revenue_interest_score = sum(revenue_scores) / len(revenue_scores) if len(revenue_scores) > 0 else None
             
             return {
                 "avg_rating": avg_rating,
                 "std_rating": std_rating,
                 "sentiment_distribution": sentiment_distribution,
                 "top_pain_points": top_pain_points,
+                "top_opportunities": top_opportunities,
                 "avg_confidence": avg_confidence,
+                "avg_churn_score": avg_churn_score,
+                "avg_revenue_interest_score": avg_revenue_interest_score,
                 "total_calls": len(insights)
             }
             
@@ -279,6 +363,10 @@ class RAGService:
                         "rating": insight.gym_rating,  # Can be None
                         "sentiment": insight.sentiment,  # Can be None
                         "topics": insight.topics or [],
+                        "pain_points": insight.pain_points or [],
+                        "opportunities": insight.opportunities or [],
+                        "churn_score": insight.churn_score,  # Can be None
+                        "revenue_interest_score": insight.revenue_interest_score,  # Can be None
                         "confidence": insight.confidence if insight.confidence is not None else 0.0
                     })
                 return examples[:limit]
@@ -299,6 +387,10 @@ class RAGService:
                         "rating": insight.gym_rating,  # Can be None
                         "sentiment": insight.sentiment,  # Can be None
                         "topics": insight.topics or [],
+                        "pain_points": insight.pain_points or [],
+                        "opportunities": insight.opportunities or [],
+                        "churn_score": insight.churn_score,  # Can be None
+                        "revenue_interest_score": insight.revenue_interest_score,  # Can be None
                         "confidence": insight.confidence if insight.confidence is not None else 0.0,
                         "similarity": similarity
                     })
