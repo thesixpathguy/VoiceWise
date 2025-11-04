@@ -306,27 +306,24 @@ export default function SearchPage() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-white font-medium">{call.phone_number}</span>
-                          {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score > 0.7 && (
-                            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                              ⚠️ Anomaly
-                            </span>
-                          )}
-                          <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(call.status)}`}>
-                            {call.status}
-                          </span>
-                          {call.insights && call.insights.sentiment && (
-                            <span className={`px-2 py-0.5 rounded text-xs ${getSentimentColor(call.insights.sentiment)}`}>
-                              {call.insights.sentiment}
-                            </span>
-                          )}
                         </div>
                         <p className="text-sm text-gray-400">
                           {new Date(call.created_at).toLocaleString()} • {call.duration_seconds ? `${Math.floor(call.duration_seconds / 60)}m ${call.duration_seconds % 60}s` : 'Duration: N/A'}
                         </p>
                       </div>
-                      {call.insights && call.insights.revenue_interest && (
-                        <span className="text-2xl">💰</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {call.insights && call.insights.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score >= 0.8 && (
+                          <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium border border-orange-500/30" title={`Anomaly Score: ${call.insights.anomaly_score.toFixed(2)}`}>
+                            ⚠️ Anomaly
+                          </span>
+                        )}
+                        {call.insights && call.insights.churn_score !== undefined && call.insights.churn_score !== null && call.insights.churn_score >= 0.8 && (
+                          <span className="text-2xl" title={`Churn Risk: ${call.insights.churn_score.toFixed(1)}`}>🔴</span>
+                        )}
+                        {call.insights && call.insights.revenue_interest_score !== undefined && call.insights.revenue_interest_score !== null && call.insights.revenue_interest_score >= 0.8 && (
+                          <span className="text-2xl" title={`Revenue Interest: ${call.insights.revenue_interest_score.toFixed(1)}`}>💰</span>
+                        )}
+                      </div>
                     </div>
 
                     {call.raw_transcript && (
@@ -411,6 +408,66 @@ export default function SearchPage() {
                       <p className="text-gray-300 text-sm whitespace-pre-wrap">
                         {selectedCall.raw_transcript}
                       </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Instructions & Answers */}
+                {selectedCall?.custom_instructions && selectedCall.custom_instructions.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-400 mb-2">Custom Instructions & Results</h3>
+                    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 space-y-3 mb-4">
+                      {selectedCall.custom_instructions.map((instruction, index) => {
+                        const result = (insights?.custom_instruction_answers || selectedCall.insights?.custom_instruction_answers)?.[instruction];
+                        const isQuestion = result?.type === 'question';
+                        const isInstruction = result?.type === 'instruction';
+                        
+                        return (
+                          <div key={index} className="border-b border-gray-700 last:border-b-0 pb-3 last:pb-0">
+                            <div className="mb-1.5">
+                              <span className="text-xs font-medium text-primary-300">📋 {isQuestion ? 'Question' : 'Instruction'}:</span>
+                              <p className="text-xs text-gray-300 mt-0.5">{instruction}</p>
+                            </div>
+                            
+                            {isQuestion && (
+                              <div>
+                                <span className="text-xs font-medium text-green-300">💬 Member's Answer:</span>
+                                <p className={`text-xs mt-0.5 ${result?.answer ? 'text-gray-200' : 'text-gray-500 italic'}`}>
+                                  {result?.answer || 'User did not answer'}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {isInstruction && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-medium text-blue-300">🤖 Agent Followed:</span>
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                    result?.followed 
+                                      ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                  }`}>
+                                    {result?.followed ? '✓ Yes' : '✗ No'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-xs font-medium text-purple-300">📝 Summary:</span>
+                                  <p className="text-xs text-gray-200 mt-0.5">
+                                    {result?.summary || 'No summary available'}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {!result && (
+                              <div>
+                                <span className="text-xs font-medium text-gray-400">Status:</span>
+                                <p className="text-xs text-gray-500 italic mt-0.5">Not processed yet</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -501,13 +558,26 @@ export default function SearchPage() {
                         </div>
                       )}
 
+                      {/* Churn Interest */}
+                      {insights.churn_score !== undefined && insights.churn_score !== null && insights.churn_score >= 0.8 && (
+                        <div className="mb-2">
+                          <span className="text-gray-400 text-sm block mb-1">Churn Interest</span>
+                          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2">
+                            <p className="text-orange-400 text-sm font-medium mb-1">⚠️ Churn Risk Score: {insights.churn_score.toFixed(1)}</p>
+                            {insights.churn_interest_quote && insights.churn_score >= 0.7 && (
+                              <p className="text-orange-300 text-sm italic">"{insights.churn_interest_quote}"</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Revenue Interest */}
-                      {insights.revenue_interest && (
+                      {insights.revenue_interest_score !== undefined && insights.revenue_interest_score !== null && insights.revenue_interest_score >= 0.8 && (
                         <div>
                           <span className="text-gray-400 text-sm block mb-1">Revenue Interest</span>
                           <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-2">
-                            <p className="text-primary-400 text-sm font-medium mb-1">💰 Revenue Interest Detected</p>
-                            {insights.revenue_interest_quote && (
+                            <p className="text-primary-400 text-sm font-medium mb-1">💰 Revenue Interest Score: {insights.revenue_interest_score.toFixed(1)}</p>
+                            {insights.revenue_interest_quote && insights.revenue_interest_score >= 0.7 && (
                               <p className="text-primary-300 text-sm italic">"{insights.revenue_interest_quote}"</p>
                             )}
                           </div>
@@ -533,34 +603,24 @@ export default function SearchPage() {
                       )}
 
                       {/* Anomaly Score */}
-                      {((insights && insights.anomaly_score !== undefined && insights.anomaly_score !== null) || 
-                        (selectedCall.insights && selectedCall.insights.anomaly_score !== undefined && selectedCall.insights.anomaly_score !== null)) && (
+                      {((insights && insights.anomaly_score !== undefined && insights.anomaly_score !== null && insights.anomaly_score >= 0.8) || 
+                        (selectedCall.insights && selectedCall.insights.anomaly_score !== undefined && selectedCall.insights.anomaly_score !== null && selectedCall.insights.anomaly_score >= 0.8)) && (
                         <div>
                           <span className="text-gray-400 text-sm block mb-1">Anomaly Score</span>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
                               <div
-                                className={`h-full transition-all ${
-                                  (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.7 ? 'bg-orange-500' : 
-                                  (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.4 ? 'bg-yellow-500' : 
-                                  'bg-gray-500'
-                                }`}
+                                className="h-full transition-all bg-orange-500"
                                 style={{ width: `${((insights?.anomaly_score || selectedCall.insights?.anomaly_score) || 0) * 100}%` }}
                               ></div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className={`text-sm font-medium ${
-                                (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.7 ? 'text-orange-400' : 
-                                (insights?.anomaly_score || selectedCall.insights?.anomaly_score) > 0.4 ? 'text-yellow-400' : 
-                                'text-gray-400'
-                              }`}>
+                              <span className="text-sm font-medium text-orange-400">
                                 {(insights?.anomaly_score || selectedCall.insights?.anomaly_score || 0).toFixed(2)}
                               </span>
-                              {(insights?.anomaly_score || selectedCall.insights?.anomaly_score || 0) > 0.7 && (
-                                <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                                  Anomaly
-                                </span>
-                              )}
+                              <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
+                                Anomaly
+                              </span>
                             </div>
                           </div>
                         </div>

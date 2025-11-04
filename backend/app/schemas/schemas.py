@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
@@ -9,6 +9,7 @@ from datetime import datetime
 class CallInitiate(BaseModel):
     """Request schema for initiating calls"""
     phone_numbers: List[str] = Field(..., min_items=1, description="List of phone numbers to call")
+    custom_instructions: Optional[List[str]] = Field(None, description="Optional custom instruction points to include in the call script")
 
 
 # API -> Client (part of CallInitiateResponse)
@@ -35,9 +36,19 @@ class CallDetail(BaseModel):
     duration_seconds: Optional[int] = None
     created_at: datetime
     raw_transcript: Optional[str] = None
+    custom_instructions: Optional[List[str]] = None  # Custom instructions for this call
     
     class Config:
         from_attributes = True
+
+
+# Paginated response for calls
+class PaginatedCallsResponse(BaseModel):
+    """Paginated calls response with total count"""
+    calls: List[CallDetail]
+    total: int
+    limit: int
+    skip: int
 
 
 # Webhook Schemas
@@ -63,11 +74,14 @@ class InsightData(BaseModel):
     main_topics: List[str] = Field(default_factory=list)
     sentiment: str = "neutral"
     gym_rating: Optional[int] = Field(None, ge=1, le=10, description="Gym rating 1-10 if mentioned")
-    pain_points: List[str] = Field(default_factory=list)
-    opportunities: List[str] = Field(default_factory=list)
-    capital_interest: bool = False
-    revenue_interest_quote: Optional[str] = None
+    pain_points: List[str] = Field(default_factory=list)  # For churn segment
+    opportunities: List[str] = Field(default_factory=list)  # For revenue segment
+    churn_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Churn risk score 0.0-1.0 (1 decimal)")
+    churn_interest_quote: Optional[str] = None  # Exact quote showing churn interest
+    revenue_interest_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Revenue interest score 0.0-1.0 (1 decimal)")
+    revenue_interest_quote: Optional[str] = None  # Exact quote showing revenue interest
     confidence: float = 0.0
+    custom_instruction_answers: Optional[Dict[str, Any]] = None  # Map of instruction -> {type: "question"/"instruction", answer: str (for questions), followed: bool, summary: str (for instructions)}
 
 
 # Service -> API -> Client
@@ -77,12 +91,15 @@ class InsightResponse(BaseModel):
     topics: List[str]
     sentiment: str
     gym_rating: Optional[int] = Field(None, ge=1, le=10, description="Gym rating 1-10 if mentioned")
-    pain_points: List[str]
-    opportunities: List[str]
-    revenue_interest: bool
-    revenue_interest_quote: Optional[str] = None
+    pain_points: List[str]  # For churn segment
+    opportunities: List[str]  # For revenue segment
+    churn_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Churn risk score 0.0-1.0 (1 decimal)")
+    churn_interest_quote: Optional[str] = None  # Exact quote showing churn interest
+    revenue_interest_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Revenue interest score 0.0-1.0 (1 decimal)")
+    revenue_interest_quote: Optional[str] = None  # Exact quote showing revenue interest
     confidence: float
     anomaly_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Statistical anomaly score 0.0-1.0")
+    custom_instruction_answers: Optional[Dict[str, Any]] = None  # Map of instruction -> {type: "question"/"instruction", answer: str (for questions), followed: bool, summary: str (for instructions)}
     extracted_at: datetime
     
     class Config:
@@ -108,21 +125,58 @@ class PainPoint(BaseModel):
 
 # Service -> API -> Client (part of DashboardSummary)
 class HighInterestQuote(BaseModel):
-    """Quote from high-interest call"""
+    """Quote from high revenue interest call"""
     quote: str
     sentiment: str
     phone_number: str
     call_id: str
 
 
+# Service -> API -> Client (part of DashboardSummary)
+class ChurnInterestQuote(BaseModel):
+    """Quote from high churn risk call"""
+    quote: str
+    sentiment: str
+    phone_number: str
+    call_id: str
+
+
+# Service -> API -> Client (part of DashboardSummary)
+class GenericSection(BaseModel):
+    """Generic section for all calls"""
+    total_calls: int
+    positive_sentiment: int
+    negative_sentiment: int
+    top_pain_points: List[PainPoint] = Field(default_factory=list)  # Top pain points from all calls
+    top_opportunities: List[PainPoint] = Field(default_factory=list)  # Top opportunities from all calls (using PainPoint schema for consistency)
+
+
+# Service -> API -> Client (part of DashboardSummary)
+class ChurnInterestSection(BaseModel):
+    """Churn interest section - calls with churn_score > threshold"""
+    total_calls: int  # Count of calls with churn_score > threshold
+    average_gym_rating: Optional[float] = None  # Average gym rating for churn calls
+    top_pain_points: List[PainPoint] = Field(default_factory=list)  # Top 5 pain points from churn calls
+    top_churn_quotes: List[ChurnInterestQuote] = Field(default_factory=list)  # Top 5 churn interest quotes (highest scores)
+    churn_threshold: float = 0.75  # Threshold used for filtering (for frontend reference)
+
+
+# Service -> API -> Client (part of DashboardSummary)
+class RevenueInterestSection(BaseModel):
+    """Revenue interest section - calls with revenue_interest_score > threshold"""
+    total_calls: int  # Count of calls with revenue_interest_score > threshold
+    average_gym_rating: Optional[float] = None  # Average gym rating for revenue calls
+    top_opportunities: List[PainPoint] = Field(default_factory=list)  # Top 5 opportunities from revenue calls
+    top_revenue_quotes: List[HighInterestQuote] = Field(default_factory=list)  # Top 5 revenue interest quotes (highest scores)
+    revenue_threshold: float = 0.75  # Threshold used for filtering (for frontend reference)
+
+
 # Service -> API -> Client
 class DashboardSummary(BaseModel):
-    """Dashboard summary response"""
-    total_calls: int
-    sentiment: SentimentDistribution
-    top_pain_points: List[PainPoint] = Field(default_factory=list)
-    high_interest_quotes: List[HighInterestQuote] = Field(default_factory=list)
-    revenue_opportunities: int = 0
+    """Dashboard summary response with three distinct sections"""
+    generic: GenericSection
+    churn_interest: ChurnInterestSection
+    revenue_interest: RevenueInterestSection
 
 
 # Health Check
@@ -167,7 +221,8 @@ class SearchAggregatedInsights(BaseModel):
     sentiment_distribution: SearchSentimentDistribution
     top_topics: List[SearchTopic] = Field(default_factory=list)
     top_pain_points: List[SearchPainPoint] = Field(default_factory=list)
-    revenue_interest_count: int = 0
+    churn_interest_count: int = 0  # Count of calls with churn_score > 0.75
+    revenue_interest_count: int = 0  # Count of calls with revenue_interest_score > 0.75
     average_confidence: float = 0.0
     total_duration_seconds: int = 0
 
@@ -178,10 +233,12 @@ class SearchCallInsights(BaseModel):
     sentiment: Optional[str] = None
     topics: List[str] = Field(default_factory=list)
     gym_rating: Optional[int] = None
-    pain_points: List[str] = Field(default_factory=list)
-    opportunities: List[str] = Field(default_factory=list)
-    revenue_interest: bool = False
-    revenue_interest_quote: Optional[str] = None
+    pain_points: List[str] = Field(default_factory=list)  # For churn segment
+    opportunities: List[str] = Field(default_factory=list)  # For revenue segment
+    churn_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Churn risk score 0.0-1.0 (1 decimal)")
+    churn_interest_quote: Optional[str] = None  # Exact quote showing churn interest
+    revenue_interest_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Revenue interest score 0.0-1.0 (1 decimal)")
+    revenue_interest_quote: Optional[str] = None  # Exact quote showing revenue interest
     confidence: float = 0.0
     anomaly_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Statistical anomaly score 0.0-1.0")
     extracted_at: Optional[str] = None  # ISO format string

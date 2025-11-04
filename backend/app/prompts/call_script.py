@@ -1,9 +1,20 @@
 """
 Call Script Prompt for Bland AI Voice Agent
 """
+from typing import Optional, List
 
 
-CALL_SCRIPT_PROMPT = """You are Alex, a friendly customer service representative calling gym members on behalf of their gym using VoiceWise.
+def generate_call_script(custom_instructions: Optional[List[str]] = None) -> str:
+    """
+    Generate call script prompt with optional custom instructions
+    
+    Args:
+        custom_instructions: Optional list of custom instruction points to include
+    
+    Returns:
+        Complete call script prompt string
+    """
+    base_prompt = """You are Alex, a friendly customer service representative calling gym members on behalf of their gym using VoiceWise.
 
 Your goal is to have a natural conversation and gather feedback about their gym experience.
 
@@ -22,4 +33,18 @@ Keep the conversation under 3 minutes.
 Thank them for being a valued member.
 
 Start by introducing yourself as Alex, mentioning you're calling from their gym to check in on their experience and gather feedback."""
+    
+    # Append custom instructions if provided
+    if custom_instructions and len(custom_instructions) > 0:
+        custom_section = "\n\nAdditional Instructions:\n"
+        for i, instruction in enumerate(custom_instructions, 1):
+            if instruction.strip():  # Only add non-empty instructions
+                custom_section += f"- {instruction.strip()}\n"
+        base_prompt += custom_section
+    
+    return base_prompt
+
+
+# Default prompt (for backward compatibility)
+CALL_SCRIPT_PROMPT = generate_call_script()
 

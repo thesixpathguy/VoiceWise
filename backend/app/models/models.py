@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Boolean, Float, ForeignKey, ARRAY
+from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Boolean, Float, ForeignKey, ARRAY, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
@@ -18,6 +18,7 @@ class Call(Base):
     duration_seconds = Column(Integer, nullable=True)
     status = Column(String(50), nullable=True)  # initiated, completed, failed, etc.
     gym_id = Column(String(255), nullable=False, index=True)
+    custom_instructions = Column(ARRAY(Text), nullable=True)  # Custom instructions provided for this call
     created_at = Column(TIMESTAMP, server_default=func.now(), index=True)
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     
@@ -37,13 +38,16 @@ class Insight(Base):
     call_id = Column(String(255), ForeignKey("calls.call_id"), nullable=False, unique=True)
     topics = Column(ARRAY(Text), nullable=True)  # Main topics discussed
     sentiment = Column(String(20), nullable=True, index=True)  # positive, neutral, negative
-    pain_points = Column(ARRAY(Text), nullable=True)  # Customer complaints/issues
-    opportunities = Column(ARRAY(Text), nullable=True)  # Upsell opportunities
-    revenue_interest = Column(Boolean, nullable=True, index=True)  # Interest in premium services
+    pain_points = Column(ARRAY(Text), nullable=True)  # Customer complaints/issues (for churn segment)
+    opportunities = Column(ARRAY(Text), nullable=True)  # Upsell opportunities (for revenue segment)
+    churn_score = Column(Float, nullable=True, index=True)  # Churn risk score 0.0-1.0 (1 decimal place)
+    churn_interest_quote = Column(Text, nullable=True)  # Exact quote showing churn interest
+    revenue_interest_score = Column(Float, nullable=True, index=True)  # Revenue interest score 0.0-1.0 (1 decimal place)
     revenue_interest_quote = Column(Text, nullable=True)  # Exact quote showing revenue interest
     gym_rating = Column(Integer, nullable=True, index=True)  # Gym rating 1-10 from member
     confidence = Column(Float, nullable=True)  # AI confidence score (0.0-1.0)
     anomaly_score = Column(Float, nullable=True, index=True)  # Anomaly score 0.0-1.0 (statistical analysis)
+    custom_instruction_answers = Column(JSON, nullable=True)  # Map of custom instruction -> extracted answer
     extracted_at = Column(TIMESTAMP, server_default=func.now(), index=True)
     
     # Relationship to call

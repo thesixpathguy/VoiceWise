@@ -1,5 +1,5 @@
 """
-Script to process all existing calls through insight extraction
+Script to process existing calls through insight extraction
 Extracts insights, calculates anomaly scores, and stores them in the insights table
 """
 import sys
@@ -18,28 +18,57 @@ from app.services.insight_service import InsightService
 from app.services.search_service import SearchService
 
 
-async def process_all_calls_for_insights():
-    """Process all calls in the database through insight extraction"""
+# Configuration: Set to True to re-analyze calls that already have insights
+REANALYZE_EXISTING = False
+
+# Groq API Rate Limits for llama-3.1-8b-instant: ~240 RPM (Requests Per Minute) = ~0.25 seconds between calls
+# Using 1 second delay to be safe and respect rate limits
+DELAY_BETWEEN_CALLS = 20.0  # seconds between API calls
+
+
+async def process_all_calls_for_insights(max_insights: int = None, reanalyze: bool = False):
+    """
+    Process calls through insight extraction
+    
+    Args:
+        max_insights: Maximum number of calls to process (None = all)
+        reanalyze: If True, re-analyze calls that already have insights
+    """
     db: Session = SessionLocal()
     insight_service = InsightService(db)
     search_service = SearchService(db)
     
     try:
-        # Get all calls that don't have insights yet - filter in query for efficiency
+        # Get calls based on reanalyze flag
         print("🔍 Querying calls from database...")
         
-        # Use LEFT JOIN to find calls without insights
-        query = db.query(Call).outerjoin(
-            Insight, Call.call_id == Insight.call_id
-        ).filter(
-            Call.raw_transcript.isnot(None),
-            Call.status == "completed",
-            Insight.call_id.is_(None)  # No insight exists for this call
-        ).order_by(Call.created_at.desc())
+        if reanalyze:
+            # Get all calls with transcripts (including those with existing insights)
+            query = db.query(Call).filter(
+                Call.raw_transcript.isnot(None),
+                Call.status == "completed"
+            ).order_by(Call.id.asc())  # Process from min ID to max ID
+            print("📋 Mode: Re-analyzing ALL calls (including existing insights)")
+        else:
+            # Use LEFT JOIN to find calls without insights
+            query = db.query(Call).outerjoin(
+                Insight, Call.call_id == Insight.call_id
+            ).filter(
+                Call.raw_transcript.isnot(None),
+                Call.status == "completed",
+                Insight.call_id.is_(None)  # No insight exists for this call
+            ).order_by(Call.id.asc())  # Process from min ID to max ID
+            print("📋 Mode: Processing only calls WITHOUT insights")
         
         all_calls = query.all()
         total_calls = len(all_calls)
-        print(f"📊 Found {total_calls} calls that need processing\n")
+        
+        # Apply limit if specified
+        if max_insights is not None and max_insights > 0:
+            all_calls = all_calls[:max_insights]
+            print(f"📊 Found {total_calls} total calls, processing {len(all_calls)} calls (limit: {max_insights})\n")
+        else:
+            print(f"📊 Found {total_calls} calls that need processing\n")
         
         processed_count = 0
         skipped_count = 0
@@ -47,23 +76,26 @@ async def process_all_calls_for_insights():
         errors_by_type = {}
         
         for i, call in enumerate(all_calls, 1):
-            # Double-check if insights already exist (race condition protection)
+            # Check if insights already exist
             existing_insight = db.query(Insight).filter(
                 Insight.call_id == call.call_id
             ).first()
             
-            if existing_insight:
-                print(f"⏭️  [{i}/{total_calls}] Skipping {call.call_id} - insights already exist")
+            if existing_insight and not reanalyze:
+                print(f"⏭️  [{i}/{len(all_calls)}] Skipping {call.call_id} - insights already exist")
                 skipped_count += 1
                 continue
+            elif existing_insight and reanalyze:
+                print(f"🔄 [{i}/{len(all_calls)}] Re-analyzing {call.call_id} - insights exist, will be updated")
             
             if not call.raw_transcript or len(call.raw_transcript.strip()) == 0:
-                print(f"⚠️  [{i}/{total_calls}] Skipping {call.call_id} - no transcript")
+                print(f"⚠️  [{i}/{len(all_calls)}] Skipping {call.call_id} - no transcript")
                 skipped_count += 1
                 continue
             
             try:
-                print(f"🔄 [{i}/{total_calls}] Processing {call.call_id}...")
+                if not existing_insight:
+                    print(f"🔄 [{i}/{len(all_calls)}] Processing {call.call_id}...")
                 
                 # Extract embedding if it exists (avoid boolean check on array which causes error)
                 embedding = None
@@ -132,10 +164,8 @@ async def process_all_calls_for_insights():
                     # Don't continue - let's see if we can identify the issue
                     continue
                 
-                # Delay between calls to avoid rate limits (increase delay if hitting limits)
-                # Note: If you hit rate limits, wait for the specified time and re-run the script
-                # It will automatically skip calls that already have insights
-                await asyncio.sleep(3.0)  # 3 second delay to reduce API call rate
+                # Delay between calls to respect Groq rate limits (30 RPM = 2 seconds minimum)
+                await asyncio.sleep(DELAY_BETWEEN_CALLS)
                 
             except Exception as e:
                 error_count += 1
@@ -157,9 +187,12 @@ async def process_all_calls_for_insights():
         print(f"\n{'='*60}")
         print(f"📊 Processing Summary:")
         print(f"  ✅ Successfully processed: {processed_count}")
-        print(f"  ⏭️  Skipped (already have insights): {skipped_count}")
+        if not reanalyze:
+            print(f"  ⏭️  Skipped (already have insights): {skipped_count}")
+        else:
+            print(f"  🔄 Re-analyzed (existing insights updated): {processed_count}")
         print(f"  ❌ Errors: {error_count}")
-        print(f"  📝 Total calls: {total_calls}")
+        print(f"  📝 Total calls processed: {len(all_calls)}")
         if errors_by_type:
             print(f"\n  Error Breakdown by Type:")
             for error_type, count in errors_by_type.items():
@@ -175,7 +208,51 @@ async def process_all_calls_for_insights():
 
 
 if __name__ == "__main__":
-    print("🚀 Starting insight extraction for all calls...\n")
-    asyncio.run(process_all_calls_for_insights())
-    print("\n✅ Insight extraction completed!")
+    print("🚀 Starting insight extraction script...\n")
+    
+    # Ask user how many insights to process
+    try:
+        user_input = input("How many calls do you want to process? (Enter number or 'all' for all calls): ").strip().lower()
+        
+        if user_input == 'all':
+            max_insights = None
+            print("📊 Processing ALL calls\n")
+        else:
+            max_insights = int(user_input)
+            if max_insights <= 0:
+                print("❌ Invalid input. Please enter a positive number or 'all'")
+                sys.exit(1)
+            print(f"📊 Processing {max_insights} calls\n")
+    except ValueError:
+        print("❌ Invalid input. Please enter a number or 'all'")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Cancelled by user")
+        sys.exit(0)
+    
+    # Ask user if they want to re-analyze existing insights
+    reanalyze = REANALYZE_EXISTING
+    if not REANALYZE_EXISTING:
+        try:
+            reanalyze_input = input("Do you want to re-analyze calls that already have insights? (y/n, default=n): ").strip().lower()
+            reanalyze = reanalyze_input in ['y', 'yes']
+            if reanalyze:
+                print("🔄 Re-analyze mode: Will update existing insights\n")
+            else:
+                print("📋 Normal mode: Will skip calls with existing insights\n")
+        except KeyboardInterrupt:
+            print("\n\n⚠️  Cancelled by user")
+            sys.exit(0)
+    else:
+        print(f"🔄 Re-analyze mode ENABLED (REANALYZE_EXISTING=True)\n")
+    
+    try:
+        asyncio.run(process_all_calls_for_insights(max_insights=max_insights, reanalyze=reanalyze))
+        print("\n✅ Insight extraction completed!")
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Process interrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ Fatal error: {str(e)}")
+        sys.exit(1)
 
