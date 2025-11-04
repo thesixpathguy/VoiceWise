@@ -19,24 +19,17 @@ export default function CallsList() {
     try {
       setLoading(true);
       const skip = (page - 1) * itemsPerPage;
-      // First, get total count with a larger limit to estimate total (or we could add a count endpoint)
-      // For now, we'll load with a reasonable limit and use pagination
-      const data = await callsAPI.listCalls({ 
+      const response = await callsAPI.listCalls({ 
         limit: itemsPerPage, 
         skip: skip 
       });
-      setCalls(data);
       
-      // Try to get total count - if API returns it, use it, otherwise estimate
-      // We'll need to make another call to get total or the API should return it
-      // For now, if we get less than limit, we know we're at the end
-      if (data.length < itemsPerPage) {
-        setTotalCalls(skip + data.length);
-      } else {
-        // Estimate: if we got full page, there might be more
-        // To get exact count, we'd need API to return total_count
-        setTotalCalls(skip + data.length + (data.length === itemsPerPage ? 1 : 0));
-      }
+      // Handle both old format (array) and new format (object with calls and total)
+      const calls = Array.isArray(response) ? response : (response.calls || []);
+      const total = (response.total !== undefined && !Array.isArray(response)) ? response.total : (calls.length < itemsPerPage ? skip + calls.length : skip + calls.length + 1);
+      
+      setCalls(calls);
+      setTotalCalls(total);
       
       setError(null);
     } catch (err) {
@@ -157,7 +150,7 @@ export default function CallsList() {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-white font-medium">{call.phone_number}</span>
                   <div className="flex items-center gap-2">
-                    {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score > 0.7 && (
+                    {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score >= 0.8 && (
                       <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium border border-orange-500/30">
                         ⚠️ Anomaly
                       </span>
@@ -294,6 +287,66 @@ export default function CallsList() {
                 </div>
               </div>
 
+              {/* Custom Instructions & Answers */}
+              {selectedCall.custom_instructions && selectedCall.custom_instructions.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-primary-400 mb-3">Custom Instructions & Results</h3>
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 space-y-4">
+                    {selectedCall.custom_instructions.map((instruction, index) => {
+                      const result = insights?.custom_instruction_answers?.[instruction];
+                      const isQuestion = result?.type === 'question';
+                      const isInstruction = result?.type === 'instruction';
+                      
+                      return (
+                        <div key={index} className="border-b border-gray-700 last:border-b-0 pb-4 last:pb-0">
+                          <div className="mb-2">
+                            <span className="text-sm font-medium text-primary-300">📋 {isQuestion ? 'Question' : 'Instruction'}:</span>
+                            <p className="text-sm text-gray-300 mt-1">{instruction}</p>
+                          </div>
+                          
+                          {isQuestion && (
+                            <div>
+                              <span className="text-sm font-medium text-green-300">💬 Member's Answer:</span>
+                              <p className={`text-sm mt-1 ${result?.answer ? 'text-gray-200' : 'text-gray-500 italic'}`}>
+                                {result?.answer || 'User did not answer'}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {isInstruction && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-blue-300">🤖 Agent Followed:</span>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  result?.followed 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                }`}>
+                                  {result?.followed ? '✓ Yes' : '✗ No'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-sm font-medium text-purple-300">📝 Summary:</span>
+                                <p className="text-sm text-gray-200 mt-1">
+                                  {result?.summary || 'No summary available'}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {!result && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-400">Status:</span>
+                              <p className="text-sm text-gray-500 italic mt-1">Not processed yet</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Transcript */}
               {selectedCall.raw_transcript && (
                 <div className="mb-6">
@@ -403,15 +456,32 @@ export default function CallsList() {
                     </div>
                   )}
 
+                  {/* Churn Interest */}
+                  {insights.churn_score !== undefined && insights.churn_score !== null && insights.churn_score >= 0.8 && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-400 mb-2">Churn Interest</p>
+                      <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+                        <p className="text-orange-400 font-medium text-sm flex items-center gap-2 mb-2">
+                          ⚠️ Churn Risk Score: {insights.churn_score.toFixed(1)}
+                        </p>
+                        {insights.churn_interest_quote && insights.churn_score >= 0.7 && (
+                          <p className="text-orange-300 text-sm italic mt-2">
+                            "{insights.churn_interest_quote}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Revenue Interest */}
-                  {insights.revenue_interest && (
+                  {insights.revenue_interest_score !== undefined && insights.revenue_interest_score !== null && insights.revenue_interest_score >= 0.8 && (
                     <div className="mb-4">
                       <p className="text-sm text-gray-400 mb-2">Revenue Interest</p>
                       <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3">
                         <p className="text-primary-400 font-medium text-sm flex items-center gap-2 mb-2">
-                          💰 Revenue Interest Detected
+                          💰 Revenue Interest Score: {insights.revenue_interest_score.toFixed(1)}
                         </p>
-                        {insights.revenue_interest_quote && (
+                        {insights.revenue_interest_quote && insights.revenue_interest_score >= 0.7 && (
                           <p className="text-primary-300 text-sm italic mt-2">
                             "{insights.revenue_interest_quote}"
                           </p>
@@ -439,33 +509,23 @@ export default function CallsList() {
                   )}
 
                   {/* Anomaly Score */}
-                  {insights.anomaly_score !== undefined && insights.anomaly_score !== null && (
+                  {insights.anomaly_score !== undefined && insights.anomaly_score !== null && insights.anomaly_score >= 0.8 && (
                     <div className="mb-4">
                       <p className="text-sm text-gray-400 mb-2">Anomaly Score</p>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
                           <div
-                            className={`h-full transition-all ${
-                              insights.anomaly_score > 0.7 ? 'bg-orange-500' : 
-                              insights.anomaly_score > 0.4 ? 'bg-yellow-500' : 
-                              'bg-gray-500'
-                            }`}
+                            className="h-full transition-all bg-orange-500"
                             style={{ width: `${insights.anomaly_score * 100}%` }}
                           ></div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-sm font-medium ${
-                            insights.anomaly_score > 0.7 ? 'text-orange-400' : 
-                            insights.anomaly_score > 0.4 ? 'text-yellow-400' : 
-                            'text-gray-400'
-                          }`}>
+                          <span className="text-sm font-medium text-orange-400">
                             {insights.anomaly_score.toFixed(2)}
                           </span>
-                          {insights.anomaly_score > 0.7 && (
-                            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                              Anomaly
-                            </span>
-                          )}
+                          <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
+                            Anomaly
+                          </span>
                         </div>
                       </div>
                     </div>

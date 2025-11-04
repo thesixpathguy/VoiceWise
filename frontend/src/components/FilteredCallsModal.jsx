@@ -22,6 +22,9 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       // If a specific call ID is provided, load just that call
       if (specificCallId) {
         loadSpecificCall(specificCallId);
+      } else if (filterType === 'call_id' && filterValue) {
+        // Also handle call_id filter type directly
+        loadSpecificCall(filterValue);
       } else {
         loadFilteredCalls(currentPage);
       }
@@ -34,13 +37,17 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       setError(null);
       
       const call = await callsAPI.getCall(callId);
-      setCalls([call]);
-      // Auto-select the call
-      setSelectedCall(call);
-      loadInsights(call.call_id);
+      if (call) {
+        setCalls([call]);
+        // Auto-select the call
+        setSelectedCall(call);
+        loadInsights(call.call_id);
+      } else {
+        setError(`Call ${callId} not found`);
+      }
     } catch (err) {
-      setError('Failed to load call');
-      console.error(err);
+      setError(`Failed to load call: ${err.message || err}`);
+      console.error('Error loading specific call:', err);
     } finally {
       setLoading(false);
     }
@@ -62,19 +69,40 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
         params.sentiment = filterValue;
       } else if (filterType === 'pain_point') {
         params.pain_point = filterValue;
+      } else if (filterType === 'pain_point_churn') {
+        // Format: "pain_point_name|threshold"
+        const [painPoint, threshold] = filterValue.split('|');
+        params.pain_point = painPoint;
+        params.churn_min_score = parseFloat(threshold) || 0.8;
+        params.order_by = 'churn_score_desc'; // Order by decreasing churn score
+      } else if (filterType === 'opportunity') {
+        params.opportunity = filterValue;
+      } else if (filterType === 'opportunity_revenue') {
+        // Format: "opportunity_name|threshold"
+        const [opportunity, threshold] = filterValue.split('|');
+        params.opportunity = opportunity;
+        params.revenue_min_score = parseFloat(threshold) || 0.8;
+        params.order_by = 'revenue_score_desc'; // Order by decreasing revenue score
       } else if (filterType === 'revenue_interest') {
         params.revenue_interest = filterValue;
+      } else if (filterType === 'churn_min_score') {
+        params.churn_min_score = filterValue;
+        params.order_by = 'churn_score_desc'; // Order by decreasing churn score
+      } else if (filterType === 'revenue_min_score') {
+        params.revenue_min_score = filterValue;
+        params.order_by = 'revenue_score_desc'; // Order by decreasing revenue score
+      } else if (filterType === 'call_id') {
+        // For specific call IDs, load that call directly
+        // This is handled by the specificCallId prop and loadSpecificCall
       }
       
-      const data = await callsAPI.listCalls(params);
-      setCalls(data);
+      const response = await callsAPI.listCalls(params);
+      // Handle both old format (array) and new format (object with calls and total)
+      const calls = Array.isArray(response) ? response : (response.calls || []);
+      const total = (response.total !== undefined && !Array.isArray(response)) ? response.total : (calls.length < itemsPerPage ? skip + calls.length : skip + calls.length + 1);
       
-      // Estimate total based on returned data
-      if (data.length < itemsPerPage) {
-        setTotalCalls(skip + data.length);
-      } else {
-        setTotalCalls(skip + data.length + (data.length === itemsPerPage ? 1 : 0));
-      }
+      setCalls(calls);
+      setTotalCalls(total);
     } catch (err) {
       setError('Failed to load filtered calls');
       console.error(err);
@@ -127,8 +155,8 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col m-auto">
         {/* Header */}
         <div className="border-b border-gray-700 p-6 flex items-center justify-between">
           <div>
@@ -186,7 +214,7 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-white font-medium">{call.phone_number}</span>
                       <div className="flex items-center gap-2">
-                        {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score > 0.7 && (
+                        {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score >= 0.8 && (
                           <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium border border-orange-500/30">
                             ⚠️ Anomaly
                           </span>
@@ -270,6 +298,66 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                   <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
                     <h3 className="text-xl font-bold text-white mb-4">Call Details</h3>
                     
+                    {/* Custom Instructions & Answers */}
+                    {selectedCall?.custom_instructions && selectedCall.custom_instructions.length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-primary-400 mb-2">Custom Instructions & Results</h4>
+                        <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3 space-y-3">
+                          {selectedCall.custom_instructions.map((instruction, index) => {
+                            const result = insights?.custom_instruction_answers?.[instruction];
+                            const isQuestion = result?.type === 'question';
+                            const isInstruction = result?.type === 'instruction';
+                            
+                            return (
+                              <div key={index} className="border-b border-gray-700 last:border-b-0 pb-3 last:pb-0">
+                                <div className="mb-1.5">
+                                  <span className="text-xs font-medium text-primary-300">📋 {isQuestion ? 'Question' : 'Instruction'}:</span>
+                                  <p className="text-xs text-gray-300 mt-0.5">{instruction}</p>
+                                </div>
+                                
+                                {isQuestion && (
+                                  <div>
+                                    <span className="text-xs font-medium text-green-300">💬 Member's Answer:</span>
+                                    <p className={`text-xs mt-0.5 ${result?.answer ? 'text-gray-200' : 'text-gray-500 italic'}`}>
+                                      {result?.answer || 'User did not answer'}
+                                    </p>
+                                  </div>
+                                )}
+                                
+                                {isInstruction && (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-xs font-medium text-blue-300">🤖 Agent Followed:</span>
+                                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                        result?.followed 
+                                          ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                      }`}>
+                                        {result?.followed ? '✓ Yes' : '✗ No'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-medium text-purple-300">📝 Summary:</span>
+                                      <p className="text-xs text-gray-200 mt-0.5">
+                                        {result?.summary || 'No summary available'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {!result && (
+                                  <div>
+                                    <span className="text-xs font-medium text-gray-400">Status:</span>
+                                    <p className="text-xs text-gray-500 italic mt-0.5">Not processed yet</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Basic Info */}
                     <div className="mb-4">
                       <h4 className="text-sm font-semibold text-primary-400 mb-2">Call Information</h4>
@@ -413,15 +501,32 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                           </div>
                         )}
 
+                        {/* Churn Interest */}
+                        {insights.churn_score !== undefined && insights.churn_score !== null && insights.churn_score >= 0.8 && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-400 mb-1">Churn Interest</p>
+                            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2">
+                              <p className="text-orange-400 font-medium text-xs flex items-center gap-2 mb-1">
+                                ⚠️ Churn Risk Score: {insights.churn_score.toFixed(1)}
+                              </p>
+                              {insights.churn_interest_quote && insights.churn_score >= 0.7 && (
+                                <p className="text-orange-300 text-xs italic mt-1">
+                                  "{insights.churn_interest_quote}"
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Revenue Interest */}
-                        {insights.revenue_interest && (
+                        {insights.revenue_interest_score !== undefined && insights.revenue_interest_score !== null && insights.revenue_interest_score >= 0.8 && (
                           <div className="mb-3">
                             <p className="text-xs text-gray-400 mb-1">Revenue Interest</p>
                             <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-2">
                               <p className="text-primary-400 font-medium text-xs flex items-center gap-2 mb-1">
-                                💰 Revenue Interest Detected
+                                💰 Revenue Interest Score: {insights.revenue_interest_score.toFixed(1)}
                               </p>
-                              {insights.revenue_interest_quote && (
+                              {insights.revenue_interest_quote && insights.revenue_interest_score >= 0.7 && (
                                 <p className="text-primary-300 text-xs italic mt-1">
                                   "{insights.revenue_interest_quote}"
                                 </p>
@@ -449,33 +554,23 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                         )}
 
                         {/* Anomaly Score */}
-                        {insights.anomaly_score !== undefined && insights.anomaly_score !== null && (
+                        {insights.anomaly_score !== undefined && insights.anomaly_score !== null && insights.anomaly_score >= 0.8 && (
                           <div className="mb-3">
                             <p className="text-xs text-gray-400 mb-1">Anomaly Score</p>
                             <div className="flex items-center gap-2">
                               <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
                                 <div
-                                  className={`h-full transition-all ${
-                                    insights.anomaly_score > 0.7 ? 'bg-orange-500' : 
-                                    insights.anomaly_score > 0.4 ? 'bg-yellow-500' : 
-                                    'bg-gray-500'
-                                  }`}
+                                  className="h-full transition-all bg-orange-500"
                                   style={{ width: `${insights.anomaly_score * 100}%` }}
                                 ></div>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <span className={`text-xs font-medium ${
-                                  insights.anomaly_score > 0.7 ? 'text-orange-400' : 
-                                  insights.anomaly_score > 0.4 ? 'text-yellow-400' : 
-                                  'text-gray-400'
-                                }`}>
+                                <span className="text-xs font-medium text-orange-400">
                                   {insights.anomaly_score.toFixed(2)}
                                 </span>
-                                {insights.anomaly_score > 0.7 && (
-                                  <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                                    Anomaly
-                                  </span>
-                                )}
+                                <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
+                                  Anomaly
+                                </span>
                               </div>
                             </div>
                           </div>

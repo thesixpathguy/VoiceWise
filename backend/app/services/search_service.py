@@ -106,16 +106,20 @@ class SearchService:
                 "duration_seconds": call.duration_seconds,
                 "raw_transcript": call.raw_transcript,
                 "gym_id": call.gym_id,
+                "custom_instructions": call.custom_instructions if call.custom_instructions else None,
                 "insights": {
                     "sentiment": insight.sentiment if insight else None,
                     "topics": insight.topics if insight else [],
                     "gym_rating": insight.gym_rating if insight else None,
                     "pain_points": insight.pain_points if insight else [],
                     "opportunities": insight.opportunities if insight else [],
-                    "revenue_interest": insight.revenue_interest if insight else False,
+                    "churn_score": insight.churn_score if insight else None,
+                    "churn_interest_quote": insight.churn_interest_quote if insight else None,
+                    "revenue_interest_score": insight.revenue_interest_score if insight else None,
                     "revenue_interest_quote": insight.revenue_interest_quote if insight else None,
                     "confidence": insight.confidence if insight else 0.0,
                     "anomaly_score": insight.anomaly_score if insight else None,
+                    "custom_instruction_answers": insight.custom_instruction_answers if insight else None,
                     "extracted_at": insight.extracted_at.isoformat() if insight and insight.extracted_at else None
                 } if insight else None
             })
@@ -294,6 +298,7 @@ class SearchService:
                 },
                 "top_topics": [],
                 "top_pain_points": [],
+                "churn_interest_count": 0,
                 "revenue_interest_count": 0,
                 "average_confidence": 0.0,
                 "total_duration_seconds": sum(c.duration_seconds or 0 for c in calls)
@@ -331,8 +336,11 @@ class SearchService:
                 {"name": point, "count": count}
                 for point, count in pain_point_counts.most_common(10)
             ],
+            "churn_interest_count": sum(
+                1 for i in insights if i.churn_score is not None and i.churn_score > 0.75
+            ),
             "revenue_interest_count": sum(
-                1 for i in insights if i.revenue_interest
+                1 for i in insights if i.revenue_interest_score is not None and i.revenue_interest_score > 0.75
             ),
             "average_confidence": sum(
                 i.confidence for i in insights if i.confidence

@@ -1,12 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { callsAPI } from '../api/api';
 
 export default function InitiateCalls() {
   const [phoneNumbers, setPhoneNumbers] = useState('');
   const [gymId, setGymId] = useState('gym_001');
+  const [customInstructions, setCustomInstructions] = useState(['']);
+  const [showCustomInstructions, setShowCustomInstructions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  // Check for phone numbers from localStorage on mount
+  useEffect(() => {
+    const savedPhoneNumbers = localStorage.getItem('initiateCalls_phoneNumbers');
+    if (savedPhoneNumbers) {
+      setPhoneNumbers(savedPhoneNumbers);
+      // Clear it after reading
+      localStorage.removeItem('initiateCalls_phoneNumbers');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,11 +38,15 @@ export default function InitiateCalls() {
       setLoading(true);
       setError(null);
       
-      const response = await callsAPI.initiateCalls(numbers, gymId);
+      // Filter out empty instructions
+      const instructions = customInstructions.filter(inst => inst.trim().length > 0);
+      
+      const response = await callsAPI.initiateCalls(numbers, gymId, instructions.length > 0 ? instructions : undefined);
       setResult(response);
       
       // Clear form on success
       setPhoneNumbers('');
+      setCustomInstructions(['']);
     } catch (err) {
       setError('Failed to initiate calls: ' + err.message);
       console.error(err);
@@ -86,6 +102,73 @@ export default function InitiateCalls() {
             <p className="text-xs text-gray-500 mt-1">
               Enter one member phone number per line (with country code)
             </p>
+          </div>
+
+          {/* Custom Instructions Section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-300">
+                Custom Instructions (Optional)
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomInstructions(!showCustomInstructions);
+                  if (!showCustomInstructions && customInstructions.length === 0) {
+                    setCustomInstructions(['']);
+                  }
+                }}
+                className="text-sm text-primary-400 hover:text-primary-300 transition-colors"
+              >
+                {showCustomInstructions ? 'Hide' : 'Show'} Instructions
+              </button>
+            </div>
+            
+            {showCustomInstructions && (
+              <div className="bg-gray-900/30 border border-gray-600 rounded-lg p-4 space-y-3">
+                <p className="text-xs text-gray-400 mb-3">
+                  Add custom instruction points / questions that will be included in the call script. The AI agent will follow these additional guidelines during the conversation.
+                </p>
+                
+                {customInstructions.map((instruction, index) => (
+                  <div key={index} className="flex items-start gap-2">
+                    <input
+                      type="text"
+                      value={instruction}
+                      onChange={(e) => {
+                        const newInstructions = [...customInstructions];
+                        newInstructions[index] = e.target.value;
+                        setCustomInstructions(newInstructions);
+                      }}
+                      placeholder="e.g., Ask about their preferred workout times"
+                      className="flex-1 px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    />
+                    {customInstructions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newInstructions = customInstructions.filter((_, i) => i !== index);
+                          setCustomInstructions(newInstructions.length > 0 ? newInstructions : ['']);
+                        }}
+                        className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-colors"
+                        title="Remove instruction"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+                
+                <button
+                  type="button"
+                  onClick={() => setCustomInstructions([...customInstructions, ''])}
+                  className="w-full px-4 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <span>+</span>
+                  Add Another Instruction
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Error Message */}

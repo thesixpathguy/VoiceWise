@@ -1,4 +1,5 @@
 import json
+from typing import Optional, List
 from app.schemas.schemas import InsightData
 from app.core.config import settings
 from app.prompts.insight_extraction import INSIGHT_EXTRACTION_PROMPT
@@ -11,13 +12,14 @@ class AIService:
         self.groq_api_key = settings.GROQ_API_KEY
         self.groq_api_url = "https://api.groq.com/openai/v1/chat/completions"
     
-    async def extract_insights(self, transcript: str, rag_context: str = "") -> InsightData:
+    async def extract_insights(self, transcript: str, rag_context: str = "", custom_instructions: Optional[List[str]] = None) -> InsightData:
         """
         Extract insights from transcript using Groq LLM with optional RAG context
         
         Args:
             transcript: Call transcript text
             rag_context: Optional RAG context string to enhance extraction
+            custom_instructions: Optional list of custom instructions to extract answers for
         
         Returns:
             InsightData with extracted information
@@ -38,7 +40,7 @@ class AIService:
         
         try:
             print(f"🤖 Calling Groq API for insight extraction...")
-            base_prompt = INSIGHT_EXTRACTION_PROMPT(transcript)
+            base_prompt = INSIGHT_EXTRACTION_PROMPT(transcript, custom_instructions)
             
             # Enhance prompt with RAG context if provided
             if rag_context:
@@ -61,7 +63,7 @@ USING THE CONTEXT ABOVE:
             }
             
             payload = {
-                "model": "llama-3.3-70b-versatile",  # Current production model
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",  # Best model with high rate limits
                 "messages": [
                     {
                         "role": "system",
@@ -110,15 +112,40 @@ USING THE CONTEXT ABOVE:
             insights_dict = json.loads(content)
             print(f"✅ Successfully extracted insights: {insights_dict}")
             
+            # Round scores to 1 decimal place (churn_score, revenue_interest_score)
+            churn_score = insights_dict.get("churn_score")
+            if churn_score is not None:
+                churn_score = round(float(churn_score), 1)
+                # Ensure it's within 0.0-1.0 range
+                churn_score = max(0.0, min(1.0, churn_score))
+            
+            revenue_interest_score = insights_dict.get("revenue_interest_score")
+            if revenue_interest_score is not None:
+                revenue_interest_score = round(float(revenue_interest_score), 1)
+                # Ensure it's within 0.0-1.0 range
+                revenue_interest_score = max(0.0, min(1.0, revenue_interest_score))
+            
+            # Only include quotes if scores are >= 0.7
+            churn_quote = insights_dict.get("churn_interest_quote")
+            if churn_score is not None and churn_score < 0.7:
+                churn_quote = None
+            
+            revenue_quote = insights_dict.get("revenue_interest_quote")
+            if revenue_interest_score is not None and revenue_interest_score < 0.7:
+                revenue_quote = None
+            
             return InsightData(
                 main_topics=insights_dict.get("main_topics", []),
                 sentiment=insights_dict.get("sentiment", "neutral"),
                 gym_rating=insights_dict.get("gym_rating"),
                 pain_points=insights_dict.get("pain_points", []),
                 opportunities=insights_dict.get("opportunities", []),
-                capital_interest=insights_dict.get("capital_interest", False),
-                revenue_interest_quote=insights_dict.get("revenue_interest_quote"),
-                confidence=insights_dict.get("confidence", 0.5)
+                churn_score=churn_score,
+                churn_interest_quote=churn_quote,
+                revenue_interest_score=revenue_interest_score,
+                revenue_interest_quote=revenue_quote,
+                confidence=insights_dict.get("confidence", 0.5),
+                custom_instruction_answers=insights_dict.get("custom_instruction_answers")
             )
         
         except requests.exceptions.HTTPError as e:
