@@ -9,14 +9,27 @@ export default function InitiateCalls() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [searchSegment, setSearchSegment] = useState(null);
 
-  // Check for phone numbers from localStorage on mount
+  // Check for phone numbers and search segment from localStorage on mount
   useEffect(() => {
     const savedPhoneNumbers = localStorage.getItem('initiateCalls_phoneNumbers');
     if (savedPhoneNumbers) {
       setPhoneNumbers(savedPhoneNumbers);
       // Clear it after reading
       localStorage.removeItem('initiateCalls_phoneNumbers');
+    }
+    
+    const savedSearchSegment = localStorage.getItem('initiateCalls_searchSegment');
+    if (savedSearchSegment) {
+      try {
+        const segment = JSON.parse(savedSearchSegment);
+        setSearchSegment(segment);
+        // Clear it after reading
+        localStorage.removeItem('initiateCalls_searchSegment');
+      } catch (e) {
+        console.error('Failed to parse search segment:', e);
+      }
     }
   }, []);
 
@@ -62,6 +75,43 @@ export default function InitiateCalls() {
         <h1 className="text-4xl font-bold text-white mb-2">Initiate Calls</h1>
         <p className="text-gray-400">Start AI-powered voice feedback calls to your gym members</p>
       </div>
+
+      {/* Search Segment Info */}
+      {searchSegment && (
+        <div className="mb-6 bg-primary-500/10 border border-primary-500/30 rounded-xl p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🔍</span>
+                <h3 className="text-lg font-semibold text-primary-400">Search Segment</h3>
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">Type:</span>
+                  <span className="text-white font-medium capitalize">
+                    {searchSegment.searchType === 'sentiment' ? 'Sentiment Search' : 'NLP Search'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">Query:</span>
+                  <span className="text-white font-medium">"{searchSegment.query}"</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">Members:</span>
+                  <span className="text-primary-400 font-semibold">{searchSegment.resultCount} phone numbers</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setSearchSegment(null)}
+              className="text-gray-400 hover:text-white transition-colors"
+              title="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Form */}
       <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-8">

@@ -249,6 +249,7 @@ class SearchAggregatedInsights(BaseModel):
     sentiment_distribution: SearchSentimentDistribution
     top_topics: List[SearchTopic] = Field(default_factory=list)
     top_pain_points: List[SearchPainPoint] = Field(default_factory=list)
+    top_opportunities: List[SearchTopic] = Field(default_factory=list)  # Using SearchTopic schema (has name and count)
     churn_interest_count: int = 0  # Count of calls with churn_score > 0.75
     revenue_interest_count: int = 0  # Count of calls with revenue_interest_score > 0.75
     average_confidence: float = 0.0
