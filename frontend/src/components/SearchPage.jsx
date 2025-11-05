@@ -419,8 +419,12 @@ export default function SearchPage() {
                     <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 space-y-3 mb-4">
                       {selectedCall.custom_instructions.map((instruction, index) => {
                         const result = (insights?.custom_instruction_answers || selectedCall.insights?.custom_instruction_answers)?.[instruction];
-                        const isQuestion = result?.type === 'question';
-                        const isInstruction = result?.type === 'instruction';
+                        // Handle both formats: object with type/answer/followed/summary OR simple string answer
+                        const answer = typeof result === 'string' ? result : result?.answer;
+                        const followed = result?.followed;
+                        const summary = result?.summary;
+                        const isQuestion = result?.type === 'question' || (typeof result === 'string' || result?.answer);
+                        const isInstruction = result?.type === 'instruction' || (result?.followed !== undefined);
                         
                         return (
                           <div key={index} className="border-b border-gray-700 last:border-b-0 pb-3 last:pb-0">
@@ -429,33 +433,35 @@ export default function SearchPage() {
                               <p className="text-xs text-gray-300 mt-0.5">{instruction}</p>
                             </div>
                             
-                            {isQuestion && (
+                            {/* Show answer if it exists (for questions or simple string format) */}
+                            {answer && (
                               <div>
                                 <span className="text-xs font-medium text-green-300">💬 Member's Answer:</span>
-                                <p className={`text-xs mt-0.5 ${result?.answer ? 'text-gray-200' : 'text-gray-500 italic'}`}>
-                                  {result?.answer || 'User did not answer'}
-                                </p>
+                                <p className="text-xs text-gray-200 mt-0.5">{answer}</p>
                               </div>
                             )}
                             
+                            {/* Show followed status and summary for instructions */}
                             {isInstruction && (
                               <div>
+                                {followed !== undefined && followed !== null && (
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="text-xs font-medium text-blue-300">🤖 Agent Followed:</span>
                                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                    result?.followed 
+                                      followed
                                       ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
                                       : 'bg-red-500/20 text-red-400 border border-red-500/30'
                                   }`}>
-                                    {result?.followed ? '✓ Yes' : '✗ No'}
+                                      {followed ? '✓ Yes' : '✗ No'}
                                   </span>
                                 </div>
+                                )}
+                                {summary && (
                                 <div>
                                   <span className="text-xs font-medium text-purple-300">📝 Summary:</span>
-                                  <p className="text-xs text-gray-200 mt-0.5">
-                                    {result?.summary || 'No summary available'}
-                                  </p>
+                                    <p className="text-xs text-gray-200 mt-0.5">{summary}</p>
                                 </div>
+                                )}
                               </div>
                             )}
                             

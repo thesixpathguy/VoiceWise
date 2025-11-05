@@ -20,13 +20,13 @@ class Settings(BaseSettings):
     BLAND_AI_WEBHOOK_URL: str = ""
     
     # Server
-    ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
     API_HOST: str = "0.0.0.0"
-    API_PORT: int = 8000
+    API_PORT: int = int(os.getenv("PORT", "8000"))  # PORT is provided by Railway
     
     # CORS
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,https://ffae099a7fe1.ngrok-free.app,https://voicewise-34chucx1r-bhattpranjal111-2698s-projects.vercel.app"
     
     # Gym
     GYM_NAME: str = "VoiceWise Gym"

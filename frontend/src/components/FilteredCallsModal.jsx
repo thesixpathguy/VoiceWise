@@ -18,6 +18,7 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       setSelectedCall(null);
       setInsights(null);
       setCurrentPage(1); // Reset to first page
+      setTotalCalls(0); // Reset total to avoid stale pagination
       
       // If a specific call ID is provided, load just that call
       if (specificCallId) {
@@ -26,7 +27,8 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
         // Also handle call_id filter type directly
         loadSpecificCall(filterValue);
       } else {
-        loadFilteredCalls(currentPage);
+        // Always start from page 1 when filter changes (don't use currentPage state as it hasn't updated yet)
+        loadFilteredCalls(1);
       }
     }
   }, [isOpen, filterType, filterValue, specificCallId]);
@@ -91,6 +93,11 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       } else if (filterType === 'revenue_min_score') {
         params.revenue_min_score = filterValue;
         params.order_by = 'revenue_score_desc'; // Order by decreasing revenue score
+      } else if (filterType === 'date_range') {
+        // Format: "start_date|end_date" (ISO date strings)
+        const [startDate, endDate] = filterValue.split('|');
+        params.start_date = startDate;
+        params.end_date = endDate;
       } else if (filterType === 'call_id') {
         // For specific call IDs, load that call directly
         // This is handled by the specificCallId prop and loadSpecificCall
@@ -99,7 +106,10 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       const response = await callsAPI.listCalls(params);
       // Handle both old format (array) and new format (object with calls and total)
       const calls = Array.isArray(response) ? response : (response.calls || []);
-      const total = (response.total !== undefined && !Array.isArray(response)) ? response.total : (calls.length < itemsPerPage ? skip + calls.length : skip + calls.length + 1);
+      // Use total from response if available, otherwise use calls length as fallback
+      const total = (response.total !== undefined && !Array.isArray(response)) 
+        ? response.total 
+        : calls.length; // If total not provided, use actual calls length (no estimation)
       
       setCalls(calls);
       setTotalCalls(total);
@@ -305,8 +315,12 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                         <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3 space-y-3">
                           {selectedCall.custom_instructions.map((instruction, index) => {
                             const result = insights?.custom_instruction_answers?.[instruction];
-                            const isQuestion = result?.type === 'question';
-                            const isInstruction = result?.type === 'instruction';
+                            // Handle both formats: object with type/answer/followed/summary OR simple string answer
+                            const answer = typeof result === 'string' ? result : result?.answer;
+                            const followed = result?.followed;
+                            const summary = result?.summary;
+                            const isQuestion = result?.type === 'question' || (typeof result === 'string' || result?.answer);
+                            const isInstruction = result?.type === 'instruction' || (result?.followed !== undefined);
                             
                             return (
                               <div key={index} className="border-b border-gray-700 last:border-b-0 pb-3 last:pb-0">
@@ -315,33 +329,35 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                                   <p className="text-xs text-gray-300 mt-0.5">{instruction}</p>
                                 </div>
                                 
-                                {isQuestion && (
+                                {/* Show answer if it exists (for questions or simple string format) */}
+                                {answer && (
                                   <div>
                                     <span className="text-xs font-medium text-green-300">💬 Member's Answer:</span>
-                                    <p className={`text-xs mt-0.5 ${result?.answer ? 'text-gray-200' : 'text-gray-500 italic'}`}>
-                                      {result?.answer || 'User did not answer'}
-                                    </p>
+                                    <p className="text-xs text-gray-200 mt-0.5">{answer}</p>
                                   </div>
                                 )}
                                 
+                                {/* Show followed status and summary for instructions */}
                                 {isInstruction && (
                                   <div>
+                                    {followed !== undefined && followed !== null && (
                                     <div className="flex items-center gap-2 mb-1">
                                       <span className="text-xs font-medium text-blue-300">🤖 Agent Followed:</span>
                                       <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                        result?.followed 
+                                          followed
                                           ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
                                           : 'bg-red-500/20 text-red-400 border border-red-500/30'
                                       }`}>
-                                        {result?.followed ? '✓ Yes' : '✗ No'}
+                                          {followed ? '✓ Yes' : '✗ No'}
                                       </span>
                                     </div>
+                                    )}
+                                    {summary && (
                                     <div>
                                       <span className="text-xs font-medium text-purple-300">📝 Summary:</span>
-                                      <p className="text-xs text-gray-200 mt-0.5">
-                                        {result?.summary || 'No summary available'}
-                                      </p>
+                                        <p className="text-xs text-gray-200 mt-0.5">{summary}</p>
                                     </div>
+                                    )}
                                   </div>
                                 )}
                                 
