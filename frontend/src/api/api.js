@@ -2,12 +2,48 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// Debug: Log the API URL being used
+console.log('🔗 API Base URL:', API_BASE_URL);
+console.log('🔗 VITE_API_URL env:', import.meta.env.VITE_API_URL);
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Add ngrok bypass header to all requests via interceptor
+api.interceptors.request.use(
+  (config) => {
+    // Always add ngrok skip browser warning header
+    config.headers['ngrok-skip-browser-warning'] = 'true';
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Handle responses that might be ngrok warning pages
+api.interceptors.response.use(
+  (response) => {
+    // Check if response is HTML (ngrok warning page)
+    if (typeof response.data === 'string' && response.data.includes('ngrok')) {
+      console.error('❌ Received ngrok warning page instead of API response');
+      throw new Error('Ngrok browser warning page detected. Please check your ngrok configuration.');
+    }
+    return response;
+  },
+  (error) => {
+    // Check if error response is HTML (ngrok warning page)
+    if (error.response && typeof error.response.data === 'string' && error.response.data.includes('ngrok')) {
+      console.error('❌ Ngrok warning page in error response');
+      error.message = 'Ngrok browser warning page detected. The ngrok-skip-browser-warning header may not be working.';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Call API endpoints
 export const callsAPI = {
@@ -46,6 +82,12 @@ export const callsAPI = {
   // Get call insights
   getCallInsights: async (callId) => {
     const response = await api.get(`/api/calls/${callId}/insights`);
+    return response.data;
+  },
+
+  // Get bulk insights for multiple calls
+  getBulkInsights: async (callIds) => {
+    const response = await api.post('/api/calls/insights/bulk', callIds);
     return response.data;
   },
 
@@ -100,6 +142,28 @@ export const callsAPI = {
     const params = {};
     if (gymId) params.gym_id = gymId;
     const response = await api.get(`/api/calls/phone/${phoneNumber}/latest`, { params });
+    return response.data;
+  },
+
+  // Trend data endpoints
+  getChurnTrend: async (gymId = null, days = 30, period = 'day') => {
+    const params = { days, period };
+    if (gymId) params.gym_id = gymId;
+    const response = await api.get('/api/calls/trends/churn', { params });
+    return response.data;
+  },
+
+  getRevenueTrend: async (gymId = null, days = 30, period = 'day') => {
+    const params = { days, period };
+    if (gymId) params.gym_id = gymId;
+    const response = await api.get('/api/calls/trends/revenue', { params });
+    return response.data;
+  },
+
+  getSentimentTrend: async (gymId = null, days = 30, period = 'day') => {
+    const params = { days, period };
+    if (gymId) params.gym_id = gymId;
+    const response = await api.get('/api/calls/trends/sentiment', { params });
     return response.data;
   },
 };
