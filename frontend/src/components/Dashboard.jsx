@@ -112,13 +112,13 @@ export default function Dashboard({ setCurrentPage }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4">
+      {/* Dashboard Title */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+      </div>
+
       {/* ===== SECTION 1: GENERIC SECTION ===== */}
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-          <span>📊</span>
-          Generic Section
-        </h2>
-        
         {/* Compact Layout: Stats + Chart in one row, Pain Points + Opportunities below */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           {/* Stats Grid - Compact 3x3 Grid */}
@@ -288,15 +288,24 @@ export default function Dashboard({ setCurrentPage }) {
         </div>
       </div>
 
+      {/* Aesthetic Divider between Generic and Churn Sections */}
+      <div className="my-8 relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+        </div>
+        <div className="relative flex justify-center">
+          <div className="bg-gray-900 px-5 py-2.5 rounded-full border border-gray-700 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></div>
+              <span className="text-base text-gray-400 font-medium">Churn Analysis</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ===== SECTION 2: CHURN INTEREST SECTION ===== */}
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-          <span>⚠️</span>
-          Churn Interest
-          <span className="text-xs font-normal text-gray-400 ml-2">
-            (Threshold: {churn.churn_threshold || 0.8})
-          </span>
-        </h2>
 
         {/* Compact Layout: Stats + Chart + Lists in optimized grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
@@ -309,7 +318,7 @@ export default function Dashboard({ setCurrentPage }) {
                 className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 cursor-pointer hover:bg-orange-500/20 transition-all"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-400 text-xs">Churn Calls</span>
+                  <span className="text-gray-400 text-xs">Top Churn Calls</span>
                 </div>
                 <p className="text-xl font-bold text-orange-400">{churn.total_calls || 0}</p>
               </div>
@@ -525,15 +534,24 @@ export default function Dashboard({ setCurrentPage }) {
         </div>
       </div>
 
+      {/* Aesthetic Divider between Churn and Revenue Sections */}
+      <div className="my-8 relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+        </div>
+        <div className="relative flex justify-center">
+          <div className="bg-gray-900 px-5 py-2.5 rounded-full border border-gray-700 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-primary-500 animate-pulse"></div>
+              <span className="text-base text-gray-400 font-medium">Revenue Analysis</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-primary-500 animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ===== SECTION 3: REVENUE INTEREST SECTION ===== */}
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-          <span>💰</span>
-          Revenue Interest
-          <span className="text-xs font-normal text-gray-400 ml-2">
-            (Threshold: {revenue.revenue_threshold || 0.8})
-          </span>
-        </h2>
 
         {/* Compact Layout: Stats + Chart + Lists in optimized grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
@@ -546,7 +564,7 @@ export default function Dashboard({ setCurrentPage }) {
                 className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3 cursor-pointer hover:bg-primary-500/20 transition-all"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-400 text-xs">Revenue Calls</span>
+                  <span className="text-gray-400 text-xs">Top Revenue Calls</span>
                 </div>
                 <p className="text-xl font-bold text-primary-400">{revenue.total_calls || 0}</p>
               </div>

@@ -167,23 +167,25 @@ async def list_calls(
 @router.get("/search", response_model=SearchResponse)
 async def search_calls(
     query: str = Query(..., description="Search query"),
-    search_type: str = Query("nlp", description="Search type: phone, status, sentiment, nlp"),
+    search_type: str = Query("nlp", description="Search type: phone, sentiment, nlp"),
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
-    limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
+    limit: int = Query(30, ge=1, le=30, description="Number of results to return (max 30)"),
     skip: int = Query(0, ge=0, description="Number of results to skip"),
     db: Session = Depends(get_db)
 ):
     """
     Hybrid search for calls
     
-    - **query**: Search query (phone number, status, sentiment value, or NLP query)
+    - **query**: Search query (phone number, sentiment value, or NLP query)
     - **search_type**: Type of search
-        - `phone`: Search by phone number (exact or partial match)
-        - `status`: Filter by call status (completed, initiated, failed)
+        - `phone`: Search by phone number (exact or partial match), sorted by confidence descending
         - `sentiment`: Filter by sentiment (positive, neutral, negative)
-        - `nlp`: Semantic search using NLP (e.g., "need trainer", "equipment issues")
+            - Positive: sorted by revenue_interest_score descending
+            - Negative: sorted by churn_score descending
+            - Neutral: sorted by confidence descending
+        - `nlp`: Semantic search using NLP (e.g., "need trainer", "equipment issues"), sorted by cosine distance (closest first)
     - **gym_id**: Optional gym filter
-    - **limit**: Max number of results (1-100)
+    - **limit**: Max number of results (1-50, default 50)
     - **skip**: Pagination offset
     
     Returns aggregated insights and individual call results
@@ -197,7 +199,7 @@ async def search_calls(
             gym_id=gym_id,
             limit=limit,
             skip=skip,
-            similarity_threshold=0.77  # Fixed threshold: balanced relevance
+            similarity_threshold=0.54  # Fixed threshold: balanced relevance
         )
         return results
     except ValueError as e:
