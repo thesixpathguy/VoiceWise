@@ -51,6 +51,28 @@ class PaginatedCallsResponse(BaseModel):
     skip: int
 
 
+# Time-series data point
+class TimeSeriesDataPoint(BaseModel):
+    """Single data point in time series"""
+    date: str  # ISO format date string
+    value: Optional[float] = None  # Score or count value
+    call_id: Optional[str] = None  # Call ID for click handling
+    count: Optional[int] = None  # Number of calls for this date
+    positive: Optional[int] = None  # For sentiment data
+    neutral: Optional[int] = None  # For sentiment data
+    negative: Optional[int] = None  # For sentiment data
+    total: Optional[int] = None  # For sentiment data
+
+
+# Time-series response
+class TimeSeriesResponse(BaseModel):
+    """Time-series data for charts"""
+    data: List[TimeSeriesDataPoint]
+    period: str  # "day", "week", "month"
+    start_date: str
+    end_date: str
+
+
 # Webhook Schemas
 
 # External (Bland AI) -> API
@@ -147,6 +169,12 @@ class GenericSection(BaseModel):
     total_calls: int
     positive_sentiment: int
     negative_sentiment: int
+    average_confidence: Optional[float] = None
+    total_duration_seconds: Optional[int] = None
+    average_duration_seconds: Optional[float] = None
+    call_pickup_rate: Optional[float] = None  # Percentage of completed calls (completed / total)
+    block_1: Optional[float] = None  # Placeholder metric 1
+    block_2: Optional[float] = None  # Placeholder metric 2
     top_pain_points: List[PainPoint] = Field(default_factory=list)  # Top pain points from all calls
     top_opportunities: List[PainPoint] = Field(default_factory=list)  # Top opportunities from all calls (using PainPoint schema for consistency)
 

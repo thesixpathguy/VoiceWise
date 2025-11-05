@@ -242,17 +242,27 @@ STEP 6 - EXTRACT FROM THIS TRANSCRIPT:
 {transcript}
 
 STEP 7 - RETURN STRUCTURED JSON (Structured Output):
+CRITICAL JSON FORMATTING RULES:
+- Return ONLY valid JSON, no additional text, explanations, or markdown code blocks
+- EVERY property MUST be followed by a comma (,) except the LAST property before the closing brace
+- Example CORRECT: "confidence": 0.92, "custom_instruction_answers": {{...}}
+- Example INCORRECT: "confidence": 0.92 "custom_instruction_answers": {{...}} (missing comma)
+- Double-check that EVERY property except the last one has a trailing comma
+- Ensure all strings use double quotes ("), numbers are unquoted, null/true/false are lowercase
+- The JSON must be valid and parseable by json.loads() without any modifications
+
+JSON Structure:
 {{
     "main_topics": [list of 2-5 main topics discussed in the feedback],
     "sentiment": "positive" | "neutral" | "negative",
     "gym_rating": number between 1-10 if mentioned in transcript, or null,
     "pain_points": [list of specific complaints, concerns, or issues mentioned by the member - for churn segment],
     "opportunities": [list of suggested improvements, requested services, or upsell opportunities - for revenue segment],
-    "churn_score": 0.0-1.0 (1 decimal place, e.g., 0.0, 0.5, 0.8, 1.0) or null if no churn indicators,
+    "churn_score": 0.0-1.0 (1 decimal place, e.g., 0.0, 0.5, 0.8, 1.0). Use 0.0 if no churn indicators are present (never use null),
     "churn_interest_quote": "exact verbatim sentence from transcript showing churn intent or null",
-    "revenue_interest_score": 0.0-1.0 (1 decimal place, e.g., 0.0, 0.5, 0.8, 1.0) or null if no revenue interest,
+    "revenue_interest_score": 0.0-1.0 (1 decimal place, e.g., 0.0, 0.5, 0.8, 1.0). Use 0.0 if no revenue interest is present (never use null),
     "revenue_interest_quote": "exact verbatim sentence from transcript showing revenue interest or null",
-    "confidence": 0.00-1.00 (rounded to 2 decimal places, e.g., 0.75, 0.92, 0.35){custom_answers_json}
+    "confidence": 0.00-1.00 (rounded to 2 decimal places, e.g., 0.75, 0.92, 0.35),{custom_answers_json}
 }}
 
 IMPORTANT: 
@@ -269,8 +279,8 @@ IMPORTANT:
 CRITICAL RULES:
 - churn_interest_quote MUST be word-for-word from the transcript (no paraphrasing)
 - revenue_interest_quote MUST be word-for-word from the transcript (no paraphrasing)
-- If churn_score is null or 0.0, churn_interest_quote MUST be null
-- If revenue_interest_score is null or 0.0, revenue_interest_quote MUST be null
+- If churn_score is 0.0 (or null for backward compatibility), churn_interest_quote MUST be null
+- If revenue_interest_score is 0.0 (or null for backward compatibility), revenue_interest_quote MUST be null
 - Only extract ONE most relevant quote for each (churn or revenue), not multiple
 - Quotes should be complete sentences or meaningful phrases
 - Do not paraphrase or summarize - use EXACT words from transcript
@@ -309,7 +319,5 @@ For a bad call (poor audio, short responses, unclear feedback), confidence shoul
 For a mediocre call, confidence should be 0.5-0.7.
 For a good call, confidence should be 0.8-1.0.
 
-- Return ONLY valid JSON, no additional text or explanations
-
-JSON:"""
+Return ONLY valid JSON, no additional text or explanations."""
 

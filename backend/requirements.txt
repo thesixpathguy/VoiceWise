@@ -35,3 +35,6 @@ pytest-asyncio==0.21.1
 
 # Utilities
 python-dateutil==2.8.2
+
+# Caching
+cachetools==5.3.2  # Free, lightweight in-memory cache with TTL support
