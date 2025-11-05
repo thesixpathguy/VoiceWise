@@ -18,7 +18,9 @@ export default function CallsList() {
   const loadCalls = async (page = 1) => {
     try {
       setLoading(true);
-      const skip = (page - 1) * itemsPerPage;
+      // Ensure page is a valid number, default to 1 if invalid
+      const pageNum = Number(page) || 1;
+      const skip = Math.max(0, (pageNum - 1) * itemsPerPage);
       const response = await callsAPI.listCalls({ 
         limit: itemsPerPage, 
         skip: skip 
@@ -70,13 +72,19 @@ export default function CallsList() {
     try {
       await callsAPI.analyzeCall(callId);
       alert('Analysis completed!');
-      loadCalls();
+      loadCalls(currentPage || 1);
       if (selectedCall?.call_id === callId) {
         loadInsights(callId);
       }
     } catch (err) {
       alert('Failed to analyze: ' + err.message);
     }
+  };
+
+  const handleRefresh = () => {
+    // Reset to page 1 and reload
+    setCurrentPage(1);
+    loadCalls(1);
   };
 
   const getStatusColor = (status) => {
@@ -112,7 +120,7 @@ export default function CallsList() {
           <p className="text-gray-400">Manage and analyze your calls</p>
         </div>
         <button
-          onClick={loadCalls}
+          onClick={handleRefresh}
           className="px-6 py-3 bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors font-medium"
         >
           🔄 Refresh
