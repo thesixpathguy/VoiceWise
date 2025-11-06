@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard'
 import CallsList from './components/CallsList'
 import InitiateCalls from './components/InitiateCalls'
 import SearchPage from './components/SearchPage'
+import LiveCalls from './components/LiveCalls'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home')
@@ -18,6 +19,8 @@ function App() {
         return <InitiateCalls />
       case 'search':
         return <SearchPage setCurrentPage={setCurrentPage} />
+      case 'live':
+        return <LiveCalls />
       default:
         return <HomePage setCurrentPage={setCurrentPage} />
     }
@@ -90,6 +93,19 @@ function App() {
                 }`}
               >
                 Search
+              </button>
+              <button
+                onClick={() => setCurrentPage('live')}
+                className={`px-4 py-2 rounded-lg transition-colors relative ${
+                  currentPage === 'live'
+                    ? 'bg-primary-500 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  Live Calls
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                </span>
               </button>
             </nav>
           </div>

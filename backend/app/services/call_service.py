@@ -115,6 +115,7 @@ class CallService:
         # Only add webhook if it's configured and valid
         if settings.BLAND_AI_WEBHOOK_URL and settings.BLAND_AI_WEBHOOK_URL.startswith("https://"):
             payload["webhook"] = settings.BLAND_AI_WEBHOOK_URL
+            payload["webhook_events"] = ["call"]
         
         # Fallback: Use curl command (system curl has newer SSL than Python's LibreSSL)
         try:

@@ -452,4 +452,54 @@ class CacheService:
         CacheService._dashboard_cache.clear()
         CacheService._bulk_insights_cache.clear()
         CacheService._chart_calls_cache.clear()
+    
+    # Live call cache (separate from other caches for faster access)
+    _live_call_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL for live calls
+    
+    @staticmethod
+    def get_live_call(call_id: str) -> Optional[Dict]:
+        """
+        Get live call data from cache
+        
+        Args:
+            call_id: Call identifier
+            
+        Returns:
+            Live call data dictionary or None
+        """
+        return CacheService._live_call_cache.get(f"live_call_{call_id}")
+    
+    @staticmethod
+    def set_live_call(call_id: str, data: Dict) -> None:
+        """
+        Store live call data in cache
+        
+        Args:
+            call_id: Call identifier
+            data: Live call data dictionary
+        """
+        CacheService._live_call_cache[f"live_call_{call_id}"] = data
+    
+    @staticmethod
+    def update_live_call_sentiment(call_id: str, sentiment: str) -> bool:
+        """
+        Update only the sentiment field in live call cache
+        
+        Args:
+            call_id: Call identifier
+            sentiment: New sentiment value
+            
+        Returns:
+            True if updated, False if call not in cache
+        """
+        cache_key = f"live_call_{call_id}"
+        live_call_data = CacheService._live_call_cache.get(cache_key)
+        
+        if live_call_data is None:
+            return False
+        
+        # Update only sentiment field
+        live_call_data["sentiment"] = sentiment
+        CacheService._live_call_cache[cache_key] = live_call_data
+        return True
 

@@ -32,7 +32,7 @@ class CallDetail(BaseModel):
     """Detailed call information"""
     call_id: str
     phone_number: str
-    status: str
+    status: Optional[str] = None
     duration_seconds: Optional[int] = None
     created_at: datetime
     raw_transcript: Optional[str] = None
@@ -85,7 +85,7 @@ class ConversationTurn(BaseModel):
 class LiveCall(BaseModel):
     """Live call data structure"""
     conversation: List[ConversationTurn] = Field(default_factory=list, description="List of conversation turns")
-    sentiment: str = Field(..., description="Overall sentiment of the call")
+    sentiment: Optional[str] = Field(None, description="Overall sentiment of the call (None for first analysis)")
     call_initiated_timestamp: str = Field(..., description="Timestamp of when the call was initiated.")
     phone_number: str = Field(..., description="Phone number that was called")
 
@@ -294,7 +294,7 @@ class SearchCallResult(BaseModel):
     """Call result in search response"""
     call_id: str
     phone_number: str
-    status: str
+    status: Optional[str] = None
     created_at: str  # ISO format string
     duration_seconds: Optional[int] = None
     raw_transcript: Optional[str] = None

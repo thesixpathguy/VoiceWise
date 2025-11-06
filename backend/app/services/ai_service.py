@@ -170,3 +170,95 @@ USING THE CONTEXT ABOVE:
         except Exception as e:
             print(f"❌ Insight extraction error: {str(e)}")
             raise
+    
+    async def analyze_live_call_sentiment(
+        self,
+        user_conversation: str,
+        previous_sentiment: Optional[str] = None
+    ) -> str:
+        """
+        Analyze sentiment from user conversation in live calls (fast, no RAG)
+        
+        Args:
+            user_conversation: Only the USER's conversation turns (not agent)
+            previous_sentiment: Previous sentiment if this is an update (None for first analysis)
+        
+        Returns:
+            Sentiment string: "positive", "neutral", or "negative"
+        """
+        from app.prompts.live_call_analysis import LIVE_CALL_SENTIMENT_PROMPT
+        
+        if not self.groq_api_key:
+            raise Exception("GROQ_API_KEY is not configured. Please set it in your .env file.")
+        
+        if not user_conversation or len(user_conversation.strip()) == 0:
+            return "neutral"  # Default to neutral if no conversation
+        
+        try:
+            prompt = LIVE_CALL_SENTIMENT_PROMPT(user_conversation, previous_sentiment)
+            
+            headers = {
+                "Authorization": f"Bearer {self.groq_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a sentiment analysis expert. Analyze conversation sentiment and return ONLY valid JSON with a 'sentiment' field."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.23,  # Lower temperature for more consistent results
+                "max_tokens": 250  # Short response for speed
+            }
+            
+            import requests
+            import certifi
+            
+            response = requests.post(
+                self.groq_api_url,
+                headers=headers,
+                json=payload,
+                timeout=15.0,  # Shorter timeout for real-time analysis
+                verify=certifi.where()
+            )
+            
+            if response.status_code != 200:
+                print(f"❌ Groq API error {response.status_code}: {response.text}")
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            # Parse AI response
+            content = result["choices"][0]["message"]["content"]
+            
+            # Extract JSON from content (may have markdown code blocks)
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            try:
+                sentiment_dict = json.loads(content)
+                sentiment = sentiment_dict.get("sentiment", "neutral").lower()
+                
+                # Validate sentiment
+                if sentiment not in ["positive", "neutral", "negative"]:
+                    print(f"⚠️ Invalid sentiment '{sentiment}', defaulting to 'neutral'")
+                    return "neutral"
+                
+                return sentiment
+            except json.JSONDecodeError as e:
+                print(f"❌ Failed to parse sentiment response as JSON: {str(e)}")
+                print(f"Raw content: {content}")
+                return "neutral"  # Default to neutral on error
+        
+        except Exception as e:
+            print(f"❌ Live call sentiment analysis error: {str(e)}")
+            return "neutral"  # Default to neutral on error
