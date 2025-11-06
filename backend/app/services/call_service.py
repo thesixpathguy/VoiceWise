@@ -623,6 +623,75 @@ class CallService:
         
         return "AGENT" if (message.startswith("Agent speech:") or message.startswith("Ending call:")) else "USER"
     
+    def trim_message_prefix(self, message: str) -> str:
+        """
+        Remove conversation turn prefixes from message.
+        
+        Args:
+            message: The message string to trim
+            
+        Returns:
+            Message with prefix removed and trimmed whitespace
+        """
+        if not message:
+            return ""
+        
+        prefixes = [
+            "Handling user speech: ",
+            "Ending call: ",
+            "Agent speech: "
+        ]
+        
+        for prefix in prefixes:
+            if message.startswith(prefix):
+                return message[len(prefix):].strip()
+        
+        return message.strip()
+    
+    def check_prefix_similarity(self, text1: str, text2: str, threshold: float = 0.7) -> bool:
+        """
+        Check if prefixes of two strings match 70% or more using similarity comparison.
+        
+        Args:
+            text1: First string to compare
+            text2: Second string to compare  
+            threshold: Similarity threshold (default 0.7 for 70%)
+            
+        Returns:
+            True if prefix similarity >= threshold, False otherwise
+        """
+        if not text1 or not text2:
+            return False
+        
+        # Take first 50 characters as prefix for comparison
+        prefix_length = min(50, min(len(text1), len(text2)))
+        
+        if prefix_length == 0:
+            return False
+        
+        prefix1 = text1[:prefix_length].lower().strip()
+        prefix2 = text2[:prefix_length].lower().strip()
+        
+        # Calculate character-level similarity
+        # Using simple character overlap ratio
+        if len(prefix1) == 0 or len(prefix2) == 0:
+            return False
+        
+        # Convert to sets of characters for comparison
+        chars1 = set(prefix1)
+        chars2 = set(prefix2)
+        
+        # Calculate Jaccard similarity (intersection over union)
+        intersection = len(chars1.intersection(chars2))
+        union = len(chars1.union(chars2))
+        
+        if union == 0:
+            return False
+        
+        similarity = intersection / union
+        
+        return similarity >= threshold
+    
     def process_live_call_conversation_turn(self, payload: WebhookPayload) -> None:
         """
         Process a live call conversation turn from webhook payload.
@@ -631,6 +700,8 @@ class CallService:
             payload: WebhookPayload containing conversation turn data
         """
         try:
+            from app.services.insight_service import InsightService
+            insight_service = InsightService(self.db)
             
             # Get cache entry from live calls cache for call id
             live_call = CacheService.get_live_call(payload.call_id)
@@ -643,7 +714,7 @@ class CallService:
                 # Create new LiveCall with first conversation turn
                 new_conversation_turn = ConversationTurn(
                     speaker_type=self.get_speaker_type(payload.message),
-                    speech=payload.message
+                    speech=self.trim_message_prefix(payload.message)
                 )
                 
                 live_call = LiveCall(
@@ -655,6 +726,7 @@ class CallService:
                 
                 # Store in cache
                 CacheService.set_live_call(payload.call_id, live_call)
+                insight_service.queue_live_call_analysis(live_call, payload.call_id)
                 
             else:
                 # Check if the current speaker type matches the last conversation turn's speaker type
@@ -665,13 +737,15 @@ class CallService:
                 last_turn = live_call.conversation[-1]
                 last_speaker_type = last_turn.speaker_type
                  
-                 # Check if speaker types match
-                if last_speaker_type == current_speaker_type:
+                # Check if speaker types match and message prefixes matches 70%
+                last_message = last_turn.speech
+                current_message = self.trim_message_prefix(payload.message)
+                if last_speaker_type == current_speaker_type and self.check_prefix_similarity(last_message, current_message):
                     # Same speaker continuing - update existing turn
                     updated_conversation = live_call.conversation.copy()
                     updated_conversation[-1] = ConversationTurn(
                         speaker_type=current_speaker_type,
-                        speech=payload.message
+                        speech=current_message
                     )
                     updated_live_call = live_call.model_copy(update={"conversation": updated_conversation})
                 else:
@@ -679,11 +753,12 @@ class CallService:
                     updated_conversation = live_call.conversation.copy()
                     updated_conversation.append(ConversationTurn(
                         speaker_type=current_speaker_type,
-                        speech=payload.message
+                        speech=current_message
                     ))
                     updated_live_call = live_call.model_copy(update={"conversation": updated_conversation})
                  
                 CacheService.set_live_call(payload.call_id, updated_live_call)
+                insight_service.queue_live_call_analysis(updated_live_call, payload.call_id)
             
         except Exception as e:
             print(f"❌ Error processing live call conversation turn: {str(e)}")
