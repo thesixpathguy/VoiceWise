@@ -73,6 +73,22 @@ class TimeSeriesResponse(BaseModel):
     end_date: str
 
 
+# Live Call Schemas
+
+# Part of LiveCall
+class ConversationTurn(BaseModel):
+    """Single conversation turn in a live call"""
+    speaker_type: str = Field(..., description="Speaker type: USER or AGENT")
+    speech: str = Field(..., description="What was said in this turn")
+
+# Live Call Model
+class LiveCall(BaseModel):
+    """Live call data structure"""
+    conversation: List[ConversationTurn] = Field(default_factory=list, description="List of conversation turns")
+    sentiment: str = Field(..., description="Overall sentiment of the call")
+    call_initiated_timestamp: str = Field(..., description="Timestamp of when the call was initiated.")
+    phone_number: str = Field(..., description="Phone number that was called")
+
 # Webhook Schemas
 
 # External (Bland AI) -> API
