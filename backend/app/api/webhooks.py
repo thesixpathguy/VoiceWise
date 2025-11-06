@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import json
+import os
+from datetime import datetime
+from pathlib import Path
 
 from app.core.database import get_db
 from app.schemas.schemas import WebhookPayload
@@ -11,6 +14,33 @@ from app.services.search_service import SearchService
 from app.models.models import Call
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
+
+# Create logs directory if it doesn't exist
+LOGS_DIR = Path(__file__).parent.parent.parent / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
+WEBHOOK_LOG_FILE = LOGS_DIR / "webhook_payloads1.log"
+
+
+def log_payload_to_file(payload: dict, context: str = ""):
+    """
+    Log raw payload to file with timestamp
+    
+    Args:
+        payload: The payload dictionary to log
+        context: Optional context string (e.g., "validation_error")
+    """
+    try:
+        timestamp = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "context": context,
+            "payload": payload
+        }
+        
+        with open(WEBHOOK_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, indent=2) + "\n" + "-" * 80 + "\n")
+    except Exception as e:
+        print(f"⚠️ Failed to log payload to file: {str(e)}")
 
 
 @router.post("/bland-ai")
@@ -35,6 +65,8 @@ async def bland_ai_webhook(
         # Get raw JSON payload
         raw_payload = await request.json()
         print(f"📨 Raw webhook payload: {json.dumps(raw_payload, indent=2)}")
+        # Log all incoming payloads to file
+        log_payload_to_file(raw_payload, context="incoming_webhook")
         
         # Validate and parse using Pydantic
         try:
@@ -42,6 +74,8 @@ async def bland_ai_webhook(
         except Exception as e:
             print(f"⚠️ Validation error: {str(e)}")
             print(f"Raw payload: {raw_payload}")
+            # Log to file
+            log_payload_to_file(raw_payload, context="validation_error")
             # Return success to Bland AI but log the issue
             return {"status": "accepted", "note": "validation_warning"}
         

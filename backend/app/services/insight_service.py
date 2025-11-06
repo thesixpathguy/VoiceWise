@@ -3,6 +3,7 @@ from sqlalchemy import func, extract, case
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
 from collections import defaultdict
+import asyncio
 from app.models.models import Insight, Call
 from app.schemas.schemas import (
     InsightData,
@@ -13,7 +14,8 @@ from app.schemas.schemas import (
     ChurnInterestQuote,
     GenericSection,
     ChurnInterestSection,
-    RevenueInterestSection
+    RevenueInterestSection,
+    LiveCall
 )
 from app.services.ai_service import AIService
 from app.services.rag_service import RAGService
@@ -24,11 +26,24 @@ from app.services.cache_service import CacheService
 class InsightService:
     """Service for managing insights and AI analysis"""
     
+    # Class-level async queue for live call analysis
+    _live_call_queue: Optional[asyncio.Queue] = None
+    _queue_processor_task: Optional[asyncio.Task] = None
+    
     def __init__(self, db: Session):
         self.db = db
         self.ai_service = AIService()
         self.rag_service = RAGService(db)
         self.anomaly_service = AnomalyService(db)
+        
+        # Initialize queue if not already initialized
+        if InsightService._live_call_queue is None:
+            InsightService._live_call_queue = asyncio.Queue()
+            # Start queue processor if not already running
+            if InsightService._queue_processor_task is None or InsightService._queue_processor_task.done():
+                InsightService._queue_processor_task = asyncio.create_task(
+                    InsightService._process_live_call_queue()
+                )
     
     async def analyze_and_store_insights(
         self,
@@ -846,3 +861,104 @@ class InsightService:
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat()
         }
+    
+    def queue_live_call_analysis(self, live_call: LiveCall, call_id: str) -> bool:
+        """
+        Queue a live call for sentiment analysis.
+        Returns True immediately after queuing.
+        
+        Args:
+            live_call: LiveCall model with conversation and current sentiment
+            call_id: Unique call identifier
+            
+        Returns:
+            True if successfully queued
+        """
+        if InsightService._live_call_queue is None:
+            InsightService._live_call_queue = asyncio.Queue()
+            # Start queue processor if not already running
+            if InsightService._queue_processor_task is None or InsightService._queue_processor_task.done():
+                InsightService._queue_processor_task = asyncio.create_task(
+                    InsightService._process_live_call_queue()
+                )
+        
+        try:
+            InsightService._live_call_queue.put_nowait({
+                "live_call": live_call,
+                "call_id": call_id
+            })
+            print(f"✅ Queued live call analysis for {call_id}")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to queue live call analysis for {call_id}: {str(e)}")
+            return False
+    
+    @staticmethod
+    async def _process_live_call_queue():
+        """
+        Background processor for live call analysis queue.
+        Processes items one by one in order.
+        """
+        print("🚀 Live call analysis queue processor started")
+        
+        while True:
+            try:
+                # Check if queue exists
+                if InsightService._live_call_queue is None:
+                    await asyncio.sleep(1)
+                    continue
+                
+                # Wait for item from queue
+                item = await InsightService._live_call_queue.get()
+                live_call = item["live_call"]
+                call_id = item["call_id"]
+                
+                print(f"📊 Processing live call analysis for {call_id}")
+                
+                # Extract only USER conversation turns
+                user_conversation_turns = [
+                    turn.speech for turn in live_call.conversation
+                    if turn.speaker_type.upper() == "USER"
+                ]
+                
+                if not user_conversation_turns:
+                    print(f"⚠️ No user conversation found for {call_id}, skipping")
+                    InsightService._live_call_queue.task_done()
+                    continue
+                
+                # Combine user conversation into text
+                user_conversation = "\n".join(user_conversation_turns)
+                
+                # Get previous sentiment from live call model
+                # If sentiment is None, this is the first analysis
+                previous_sentiment = live_call.sentiment if live_call.sentiment else None
+                
+                # Analyze sentiment using AI (no RAG, fast)
+                ai_service = AIService()
+                new_sentiment = await ai_service.analyze_live_call_sentiment(
+                    user_conversation=user_conversation,
+                    previous_sentiment=previous_sentiment
+                )
+                
+                print(f"✅ Analyzed sentiment for {call_id}: {new_sentiment}")
+                
+                # Update cache entry with new sentiment
+                cache_updated = CacheService.update_live_call_sentiment(call_id, new_sentiment)
+                
+                if cache_updated:
+                    print(f"✅ Updated cache for {call_id} with sentiment: {new_sentiment}")
+                else:
+                    print(f"⚠️ Cache entry not found for {call_id}, sentiment analysis completed but not cached")
+                
+                # Mark task as done
+                InsightService._live_call_queue.task_done()
+                
+            except Exception as e:
+                print(f"❌ Error processing live call analysis: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # Mark task as done even on error to prevent queue blocking
+                if InsightService._live_call_queue:
+                    InsightService._live_call_queue.task_done()
+                # Continue processing next item
+                await asyncio.sleep(1)  # Brief pause before retrying
