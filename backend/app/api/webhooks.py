@@ -1,4 +1,4 @@
-from backend.app.services.cache_service import CacheService
+from app.services.cache_service import CacheService
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
