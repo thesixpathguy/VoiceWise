@@ -296,3 +296,14 @@ class SearchResponse(BaseModel):
     total_results: int
     aggregated_insights: SearchAggregatedInsights
     calls: List[SearchCallResult] = Field(default_factory=list)
+
+
+# Pickup Rate Schemas
+
+# Service -> API -> Client
+class CallPickupRateResponse(BaseModel):
+    """Pickup rate statistics for calls page"""
+    total_calls: int  # Total number of calls
+    human_pickups: int  # Number of calls answered by human
+    pickup_rate: float  # Percentage of calls answered by human (0-100): (human_pickups / total_calls) * 100
+    gym_id: Optional[str] = None  # Gym ID if filtered

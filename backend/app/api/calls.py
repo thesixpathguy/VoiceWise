@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, Body
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.schemas.schemas import (
     CallInitiate,
@@ -12,7 +13,8 @@ from app.schemas.schemas import (
     SearchResponse,
     PaginatedCallsResponse,
     TimeSeriesResponse,
-    TimeSeriesDataPoint
+    TimeSeriesDataPoint,
+    CallPickupRateResponse
 )
 from app.services.call_service import CallService
 from app.services.insight_service import InsightService
@@ -336,6 +338,46 @@ async def get_dashboard_summary(
         return summary
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate dashboard: {str(e)}")
+
+
+@router.get("/stats/pickup", response_model=CallPickupRateResponse)
+async def get_pickup_stats(
+    gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get pickup rate statistics for calls page
+    
+    Pickup rate = (calls answered by human) / total calls * 100
+    
+    - **gym_id**: Optional gym filter
+    """
+    from app.models.models import Call
+    
+    try:
+        # Build query
+        query = db.query(Call)
+        
+        if gym_id:
+            query = query.filter(Call.gym_id == gym_id)
+        
+        # Get total calls and human pickups
+        total_calls = query.count()
+        human_pickups = query.filter(Call.answered_by == 'human').count()
+        
+        # Calculate pickup rate: (humans answered / total calls) * 100
+        pickup_rate = round((human_pickups / total_calls * 100), 1) if total_calls > 0 else 0.0
+        
+        return CallPickupRateResponse(
+            total_calls=total_calls,
+            human_pickups=human_pickups,
+            pickup_rate=pickup_rate,
+            gym_id=gym_id
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to calculate pickup stats: {str(e)}")
+
 
 
 @router.delete("/{call_id}")

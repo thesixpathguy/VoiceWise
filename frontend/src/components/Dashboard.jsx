@@ -150,65 +150,6 @@ export default function Dashboard({ setCurrentPage }) {
               <p className="text-lg font-bold text-red-400">{generic.negative_sentiment || 0}</p>
             </div>
 
-            {/* Average Confidence - Gray, Non-clickable */}
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-              <span className="text-gray-400 text-xs mb-0.5">Avg Confidence</span>
-              <p className="text-lg font-bold text-white">
-                {generic.average_confidence !== null && generic.average_confidence !== undefined 
-                  ? generic.average_confidence.toFixed(2)
-                  : 'N/A'}
-              </p>
-            </div>
-
-            {/* Total Duration - Gray, Non-clickable */}
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-              <span className="text-gray-400 text-xs mb-0.5">Total Duration</span>
-              <p className="text-lg font-bold text-white">
-                {generic.total_duration_seconds !== null && generic.total_duration_seconds !== undefined 
-                  ? `${Math.floor(generic.total_duration_seconds / 60)}m`
-                  : 'N/A'}
-              </p>
-            </div>
-
-            {/* Average Duration - Gray, Non-clickable */}
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-              <span className="text-gray-400 text-xs mb-0.5">Avg Duration</span>
-              <p className="text-lg font-bold text-white">
-                {generic.average_duration_seconds !== null && generic.average_duration_seconds !== undefined 
-                  ? `${Math.floor(generic.average_duration_seconds)}s`
-                  : 'N/A'}
-              </p>
-            </div>
-
-            {/* Call Pick Up Rate - Gray, Non-clickable */}
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-              <span className="text-gray-400 text-xs mb-0.5">Call Pick Up Rate</span>
-              <p className="text-lg font-bold text-white">
-                {generic.call_pickup_rate !== null && generic.call_pickup_rate !== undefined 
-                  ? `${generic.call_pickup_rate}%`
-                  : 'N/A'}
-              </p>
-            </div>
-
-            {/* Block 1 - Gray, Non-clickable */}
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-              <span className="text-gray-400 text-xs mb-0.5">Block 1</span>
-              <p className="text-lg font-bold text-white">
-                {generic.block_1 !== null && generic.block_1 !== undefined 
-                  ? generic.block_1.toFixed(1)
-                  : 'N/A'}
-              </p>
-            </div>
-
-            {/* Block 2 - Gray, Non-clickable */}
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-              <span className="text-gray-400 text-xs mb-0.5">Block 2</span>
-              <p className="text-lg font-bold text-white">
-                {generic.block_2 !== null && generic.block_2 !== undefined 
-                  ? generic.block_2.toFixed(1)
-                  : 'N/A'}
-              </p>
-            </div>
           </div>
 
           {/* Sentiment Trend Chart - Wider and Higher */}

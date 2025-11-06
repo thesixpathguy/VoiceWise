@@ -166,6 +166,14 @@ export const callsAPI = {
     const response = await api.get('/api/calls/trends/sentiment', { params });
     return response.data;
   },
+
+  // Get pickup rate statistics
+  getPickupStats: async (gymId = null) => {
+    const params = {};
+    if (gymId) params.gym_id = gymId;
+    const response = await api.get('/api/calls/stats/pickup', { params });
+    return response.data;
+  },
 };
 
 // Health check
