@@ -29,7 +29,7 @@ async def startup_event():
     """Initialize database on startup"""
     print("🚀 Starting VoiceWise API...")
     print(f"📊 Environment: {settings.ENVIRONMENT}")
-    init_db()
+    # init_db()
     print("✅ Database initialized")
 
 

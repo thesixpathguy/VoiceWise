@@ -167,6 +167,14 @@ export const callsAPI = {
     return response.data;
   },
 
+  // Get pickup rate statistics
+  getPickupStats: async (gymId = null) => {
+    const params = {};
+    if (gymId) params.gym_id = gymId;
+    const response = await api.get('/api/calls/stats/pickup', { params });
+    return response.data;
+  },
+
   // Get all live calls
   getLiveCalls: async () => {
     const response = await api.get('/api/calls/live');

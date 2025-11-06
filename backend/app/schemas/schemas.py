@@ -37,6 +37,7 @@ class CallDetail(BaseModel):
     created_at: datetime
     raw_transcript: Optional[str] = None
     custom_instructions: Optional[List[str]] = None  # Custom instructions for this call
+    answered_by: Optional[str] = None  # Who answered the call: human, voicemail, unknown, no-answer
     
     class Config:
         from_attributes = True
@@ -105,7 +106,7 @@ class WebhookPayload(BaseModel):
     call_length: Optional[float] = Field(None, description="Call duration in minutes")
     status: Optional[str] = Field(None, description="Call status (completed, failed, etc)")
     concatenated_transcript: Optional[str] = Field(None, description="Full transcript as a single string")
-    
+    answered_by:Optional[str]=Field(None,description="Who answered the call: human, voicemail, unknown, or no-answer")
     class Config:
         extra = "ignore"  # Allow extra fields from Bland AI
 
@@ -305,6 +306,7 @@ class SearchCallResult(BaseModel):
     duration_seconds: Optional[int] = None
     raw_transcript: Optional[str] = None
     gym_id: Optional[str] = None
+    answered_by: Optional[str] = None  # Who answered the call: human, voicemail, unknown, no-answer
     insights: Optional[SearchCallInsights] = None
 
 
@@ -316,3 +318,14 @@ class SearchResponse(BaseModel):
     total_results: int
     aggregated_insights: SearchAggregatedInsights
     calls: List[SearchCallResult] = Field(default_factory=list)
+
+
+# Pickup Rate Schemas
+
+# Service -> API -> Client
+class CallPickupRateResponse(BaseModel):
+    """Pickup rate statistics for calls page"""
+    total_calls: int  # Total number of calls
+    human_pickups: int  # Number of calls answered by human
+    pickup_rate: float  # Percentage of calls answered by human (0-100): (human_pickups / total_calls) * 100
+    gym_id: Optional[str] = None  # Gym ID if filtered

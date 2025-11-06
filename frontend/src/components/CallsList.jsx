@@ -9,11 +9,36 @@ export default function CallsList() {
   const [insights, setInsights] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCalls, setTotalCalls] = useState(0);
+  const [generic, setGeneric] = useState({});
+  const [pickupStats, setPickupStats] = useState(null);
   const itemsPerPage = 10;
 
   useEffect(() => {
     loadCalls(currentPage);
+    loadSummary();
+    loadPickupStats();
   }, [currentPage]);
+
+  const loadPickupStats = async () => {
+    try {
+      const data = await callsAPI.getPickupStats();
+      console.log('Pickup stats data:', data);
+      setPickupStats(data);
+    } catch (err) {
+      console.error('Failed to load pickup stats:', err);
+    }
+  };
+
+  const loadSummary = async () => {
+    try {
+      const data = await callsAPI.getDashboardSummary();
+      console.log('Dashboard summary data:', data);
+      console.log('Generic data:', data.generic);
+      setGeneric(data.generic || {});
+    } catch (err) {
+      console.error('Failed to load summary data:', err);
+    }
+  };
 
   const loadCalls = async (page = 1) => {
     try {
@@ -107,6 +132,8 @@ export default function CallsList() {
     // Reset to page 1 and reload
     setCurrentPage(1);
     loadCalls(1);
+    loadSummary();
+    loadPickupStats();
   };
 
   const getStatusColor = (status) => {
@@ -136,17 +163,84 @@ export default function CallsList() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-white mb-2">Calls</h1>
-          <p className="text-gray-400">Manage and analyze your calls</p>
-        </div>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold text-white">Calls</h1>
         <button
           onClick={handleRefresh}
-          className="px-6 py-3 bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors font-medium"
+          title="Refresh metrics and calls"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+          aria-label="Refresh metrics and calls"
         >
-          🔄 Refresh
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 12a8 8 0 10-2.1 5.1L20 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M20 4v6h-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span className="text-sm font-medium">Refresh</span>
         </button>
+      </div>
+
+      {/* General Metrics Grid */}
+      <div className="mb-8 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700 rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">📊 Call Metrics</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {/* Avg Confidence */}
+          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
+            <p className="text-gray-400 text-sm mb-2">Avg Confidence</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-white">
+                {generic.average_confidence !== null && generic.average_confidence !== undefined
+                  ? generic.average_confidence.toFixed(2)
+                  : 'N/A'}
+              </span>
+            </div>
+          </div>
+
+          {/* Total Duration */}
+          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
+            <p className="text-gray-400 text-sm mb-2">Total Duration</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-white">
+                {generic.total_duration_seconds !== null && generic.total_duration_seconds !== undefined
+                  ? `${Math.floor(generic.total_duration_seconds / 60)}`
+                  : 'N/A'}
+              </span>
+              <span className="text-sm text-gray-400">min</span>
+            </div>
+          </div>
+
+          {/* Avg Duration */}
+          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
+            <p className="text-gray-400 text-sm mb-2">Avg Duration</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-white">
+                {generic.average_duration_seconds !== null && generic.average_duration_seconds !== undefined
+                  ? `${Math.floor(generic.average_duration_seconds)}`
+                  : 'N/A'}
+              </span>
+              <span className="text-sm text-gray-400">sec</span>
+            </div>
+          </div>
+
+          {/* Total Calls */}
+          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
+            <p className="text-gray-400 text-sm mb-2">Total Calls</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-white">{generic.total_calls || 0}</span>
+            </div>
+          </div>
+
+          {/* Pickup Rate */}
+          {pickupStats && (
+            <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
+              <p className="text-gray-400 text-sm mb-2">Pickup Rate</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-green-400">{pickupStats.pickup_rate.toFixed(1)}</span>
+                <span className="text-lg text-gray-400">%</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
