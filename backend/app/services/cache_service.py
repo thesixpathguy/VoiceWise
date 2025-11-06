@@ -482,62 +482,26 @@ class CacheService:
         CacheService._live_call_cache[f"live_call_{call_id}"] = live_call
     
     @staticmethod
-    def update_live_call_sentiment(call_id: str, sentiment: str) -> bool:
+    def get_all_live_calls() -> List[LiveCall]:
         """
-        Update only the sentiment field in live call cache
+        Get all live calls from cache efficiently.
+        Returns all entries with prefix "live_call_"
         
-        Args:
-            call_id: Call identifier
-            sentiment: New sentiment value
-            
+        Optimized for low latency - direct in-memory cache access with minimal overhead.
+        No database queries, no external calls - pure in-memory operation.
+        
         Returns:
-            True if updated, False if call not in cache
+            List of LiveCall Pydantic models
         """
-        cache_key = f"live_call_{call_id}"
-        live_call = CacheService._live_call_cache.get(cache_key)
+        prefix = "live_call_"
+        live_calls = []
         
-        if live_call is None:
-            return False
+        # Direct iteration through cache keys - very fast for in-memory cache
+        for key in CacheService._live_call_cache.keys():
+            if isinstance(key, str) and key.startswith(prefix):
+                live_call = CacheService._live_call_cache.get(key)
+                if live_call is not None:
+                    live_calls.append(live_call)
         
-        # Update using Pydantic model_copy
-        updated_live_call = live_call.model_copy(update={"sentiment": sentiment})
-        CacheService._live_call_cache[cache_key] = updated_live_call
-        return True
-    
-    @staticmethod
-    def update_live_call_analysis(
-        call_id: str,
-        sentiment: str,
-        churn_score: float,
-        revenue_interest_score: float,
-        confidence: float
-    ) -> bool:
-        """
-        Update analysis fields (sentiment, churn_score, revenue_interest_score, confidence) in live call cache
-        
-        Args:
-            call_id: Call identifier
-            sentiment: New sentiment value
-            churn_score: New churn score value
-            revenue_interest_score: New revenue interest score value
-            confidence: New confidence value
-            
-        Returns:
-            True if updated, False if call not in cache
-        """
-        cache_key = f"live_call_{call_id}"
-        live_call = CacheService._live_call_cache.get(cache_key)
-        
-        if live_call is None:
-            return False
-        
-        # Update all analysis fields using Pydantic model_copy
-        updated_live_call = live_call.model_copy(update={
-            "sentiment": sentiment,
-            "churn_score": churn_score,
-            "revenue_interest_score": revenue_interest_score,
-            "confidence": confidence
-        })
-        CacheService._live_call_cache[cache_key] = updated_live_call
-        return True
+        return live_calls
 
