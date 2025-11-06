@@ -929,26 +929,39 @@ class InsightService:
                 # Combine user conversation into text
                 user_conversation = "\n".join(user_conversation_turns)
                 
-                # Get previous sentiment from live call model
-                # If sentiment is None, this is the first analysis
+                # Get previous analysis values from live call model
+                # If values are None, this is the first analysis
                 previous_sentiment = live_call.sentiment if live_call.sentiment else None
+                previous_churn_score = live_call.churn_score if live_call.churn_score is not None else None
+                previous_revenue_score = live_call.revenue_interest_score if live_call.revenue_interest_score is not None else None
                 
-                # Analyze sentiment using AI (no RAG, fast)
+                # Analyze using AI (no RAG, fast)
                 ai_service = AIService()
-                new_sentiment = await ai_service.analyze_live_call_sentiment(
+                analysis_result = await ai_service.analyze_live_call(
                     user_conversation=user_conversation,
-                    previous_sentiment=previous_sentiment
+                    previous_sentiment=previous_sentiment,
+                    previous_churn_score=previous_churn_score,
+                    previous_revenue_score=previous_revenue_score
                 )
                 
-                print(f"✅ Analyzed sentiment for {call_id}: {new_sentiment}")
+                new_sentiment = analysis_result["sentiment"]
+                new_churn_score = analysis_result["churn_score"]
+                new_revenue_score = analysis_result["revenue_interest_score"]
+                new_confidence = analysis_result["confidence"]
                 
-                # Update cache entry with new sentiment
-                cache_updated = CacheService.update_live_call_sentiment(call_id, new_sentiment)
+                print(f"✅ Analyzed for {call_id}: sentiment={new_sentiment}, churn={new_churn_score:.1f}, revenue={new_revenue_score:.1f}, confidence={new_confidence:.2f}")
                 
-                if cache_updated:
-                    print(f"✅ Updated cache for {call_id} with sentiment: {new_sentiment}")
-                else:
-                    print(f"⚠️ Cache entry not found for {call_id}, sentiment analysis completed but not cached")
+                # Update the LiveCall model with new analysis results
+                updated_live_call = live_call.model_copy(update={
+                    "sentiment": new_sentiment,
+                    "churn_score": new_churn_score,
+                    "revenue_interest_score": new_revenue_score,
+                    "confidence": new_confidence
+                })
+                
+                # Store/update in cache
+                CacheService.set_live_call(call_id, updated_live_call)
+                print(f"✅ Updated cache for {call_id} with all analysis fields")
                 
                 # Mark task as done
                 InsightService._live_call_queue.task_done()

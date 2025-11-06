@@ -1,5 +1,5 @@
 import json
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.schemas.schemas import InsightData
 from app.core.config import settings
 from app.prompts.insight_extraction import INSIGHT_EXTRACTION_PROMPT
@@ -171,31 +171,48 @@ USING THE CONTEXT ABOVE:
             print(f"❌ Insight extraction error: {str(e)}")
             raise
     
-    async def analyze_live_call_sentiment(
+    async def analyze_live_call(
         self,
         user_conversation: str,
-        previous_sentiment: Optional[str] = None
-    ) -> str:
+        previous_sentiment: Optional[str] = None,
+        previous_churn_score: Optional[float] = None,
+        previous_revenue_score: Optional[float] = None
+    ) -> Dict[str, Any]:
         """
-        Analyze sentiment from user conversation in live calls (fast, no RAG)
+        Analyze sentiment, churn, revenue, and confidence from user conversation in live calls (fast, no RAG)
         
         Args:
             user_conversation: Only the USER's conversation turns (not agent)
             previous_sentiment: Previous sentiment if this is an update (None for first analysis)
+            previous_churn_score: Previous churn score if this is an update (None for first analysis)
+            previous_revenue_score: Previous revenue score if this is an update (None for first analysis)
         
         Returns:
-            Sentiment string: "positive", "neutral", or "negative"
+            Dictionary with: sentiment, churn_score, revenue_interest_score, confidence
         """
-        from app.prompts.live_call_analysis import LIVE_CALL_SENTIMENT_PROMPT
+        from app.prompts.live_call_analysis import LIVE_CALL_ANALYSIS_PROMPT
         
         if not self.groq_api_key:
             raise Exception("GROQ_API_KEY is not configured. Please set it in your .env file.")
         
+        # Default values
+        default_result = {
+            "sentiment": "neutral",
+            "churn_score": 0.0,
+            "revenue_interest_score": 0.0,
+            "confidence": 0.5
+        }
+        
         if not user_conversation or len(user_conversation.strip()) == 0:
-            return "neutral"  # Default to neutral if no conversation
+            return default_result
         
         try:
-            prompt = LIVE_CALL_SENTIMENT_PROMPT(user_conversation, previous_sentiment)
+            prompt = LIVE_CALL_ANALYSIS_PROMPT(
+                user_conversation,
+                previous_sentiment,
+                previous_churn_score,
+                previous_revenue_score
+            )
             
             headers = {
                 "Authorization": f"Bearer {self.groq_api_key}",
@@ -207,7 +224,7 @@ USING THE CONTEXT ABOVE:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a sentiment analysis expert. Analyze conversation sentiment and return ONLY valid JSON with a 'sentiment' field."
+                        "content": "You are an expert business analyst. Analyze conversation for sentiment, churn risk, revenue interest, and confidence. Return ONLY valid JSON."
                     },
                     {
                         "role": "user",
@@ -215,7 +232,7 @@ USING THE CONTEXT ABOVE:
                     }
                 ],
                 "temperature": 0.23,  # Lower temperature for more consistent results
-                "max_tokens": 250  # Short response for speed
+                "max_tokens": 400  # Slightly more tokens for all fields
             }
             
             import requests
@@ -245,20 +262,53 @@ USING THE CONTEXT ABOVE:
                 content = content.split("```")[1].split("```")[0].strip()
             
             try:
-                sentiment_dict = json.loads(content)
-                sentiment = sentiment_dict.get("sentiment", "neutral").lower()
+                analysis_dict = json.loads(content)
                 
-                # Validate sentiment
+                # Extract and validate sentiment
+                sentiment = analysis_dict.get("sentiment", "neutral").lower()
                 if sentiment not in ["positive", "neutral", "negative"]:
                     print(f"⚠️ Invalid sentiment '{sentiment}', defaulting to 'neutral'")
-                    return "neutral"
+                    sentiment = "neutral"
                 
-                return sentiment
+                # Extract and validate churn_score
+                churn_score = analysis_dict.get("churn_score", 0.0)
+                if churn_score is None:
+                    churn_score = 0.0
+                else:
+                    churn_score = round(float(churn_score), 1)
+                    churn_score = max(0.0, min(1.0, churn_score))
+                
+                # Extract and validate revenue_interest_score
+                revenue_score = analysis_dict.get("revenue_interest_score", 0.0)
+                if revenue_score is None:
+                    revenue_score = 0.0
+                else:
+                    revenue_score = round(float(revenue_score), 1)
+                    revenue_score = max(0.0, min(1.0, revenue_score))
+                
+                # Extract and validate confidence
+                confidence = analysis_dict.get("confidence", 0.5)
+                if confidence is None:
+                    confidence = 0.5
+                else:
+                    confidence = round(float(confidence), 2)
+                    confidence = max(0.0, min(1.0, confidence))
+                
+                return {
+                    "sentiment": sentiment,
+                    "churn_score": churn_score,
+                    "revenue_interest_score": revenue_score,
+                    "confidence": confidence
+                }
             except json.JSONDecodeError as e:
-                print(f"❌ Failed to parse sentiment response as JSON: {str(e)}")
+                print(f"❌ Failed to parse analysis response as JSON: {str(e)}")
                 print(f"Raw content: {content}")
-                return "neutral"  # Default to neutral on error
+                return default_result
+            except (ValueError, TypeError) as e:
+                print(f"❌ Failed to parse analysis values: {str(e)}")
+                print(f"Raw content: {content}")
+                return default_result
         
         except Exception as e:
-            print(f"❌ Live call sentiment analysis error: {str(e)}")
-            return "neutral"  # Default to neutral on error
+            print(f"❌ Live call analysis error: {str(e)}")
+            return default_result
