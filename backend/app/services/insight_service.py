@@ -913,6 +913,13 @@ class InsightService:
                 live_call = item["live_call"]
                 call_id = item["call_id"]
                 
+                # Check if call still exists in cache (call might have completed)
+                cached_live_call = CacheService.get_live_call(call_id)
+                if cached_live_call is None:
+                    print(f"⚠️ Call {call_id} not found in cache (call completed), skipping analysis")
+                    InsightService._live_call_queue.task_done()
+                    continue
+                
                 print(f"📊 Processing live call analysis for {call_id}")
                 
                 # Extract only USER conversation turns
@@ -951,8 +958,15 @@ class InsightService:
                 
                 print(f"✅ Analyzed for {call_id}: sentiment={new_sentiment}, churn={new_churn_score:.1f}, revenue={new_revenue_score:.1f}, confidence={new_confidence:.2f}")
                 
-                # Update the LiveCall model with new analysis results
-                updated_live_call = live_call.model_copy(update={
+                # Check again if call still exists in cache (call might have completed during analysis)
+                cached_live_call_after = CacheService.get_live_call(call_id)
+                if cached_live_call_after is None:
+                    print(f"⚠️ Call {call_id} completed during analysis, skipping cache update")
+                    InsightService._live_call_queue.task_done()
+                    continue
+                
+                # Update the cached LiveCall model with new analysis results
+                updated_live_call = cached_live_call_after.model_copy(update={
                     "sentiment": new_sentiment,
                     "churn_score": new_churn_score,
                     "revenue_interest_score": new_revenue_score,

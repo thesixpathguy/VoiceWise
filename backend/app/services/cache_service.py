@@ -483,6 +483,30 @@ class CacheService:
         CacheService._live_call_cache[f"live_call_{call_id}"] = live_call
     
     @staticmethod
+    def get_all_live_calls() -> List[LiveCall]:
+        """
+        Get all live calls from cache efficiently.
+        Returns all entries with prefix "live_call_"
+        
+        Optimized for low latency - direct in-memory cache access with minimal overhead.
+        No database queries, no external calls - pure in-memory operation.
+        
+        Returns:
+            List of LiveCall Pydantic models
+        """
+        prefix = "live_call_"
+        live_calls = []
+        
+        # Direct iteration through cache keys - very fast for in-memory cache
+        for key in CacheService._live_call_cache.keys():
+            if isinstance(key, str) and key.startswith(prefix):
+                live_call = CacheService._live_call_cache.get(key)
+                if live_call is not None:
+                    live_calls.append(live_call)
+        
+        return live_calls
+
+    @staticmethod
     def invalidate_live_call_cache(call_id: str) -> None:
         """
         Invalidate live call cache
