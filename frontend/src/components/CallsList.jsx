@@ -30,7 +30,29 @@ export default function CallsList() {
       const calls = Array.isArray(response) ? response : (response.calls || []);
       const total = (response.total !== undefined && !Array.isArray(response)) ? response.total : (calls.length < itemsPerPage ? skip + calls.length : skip + calls.length + 1);
       
-      setCalls(calls);
+      // Load insights in bulk for all calls
+      if (calls.length > 0) {
+        try {
+          const callIds = calls.map(call => call.call_id);
+          const bulkInsightsResponse = await callsAPI.getBulkInsights(callIds);
+          const insightsMap = bulkInsightsResponse.insights || {};
+          
+          // Merge insights into calls
+          const callsWithInsights = calls.map(call => ({
+            ...call,
+            insights: insightsMap[call.call_id] || null
+          }));
+          
+          setCalls(callsWithInsights);
+        } catch (insightsErr) {
+          console.error('Failed to load insights:', insightsErr);
+          // Still set calls even if insights fail
+          setCalls(calls);
+        }
+      } else {
+        setCalls(calls);
+      }
+      
       setTotalCalls(total);
       
       setError(null);
@@ -158,10 +180,11 @@ export default function CallsList() {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-white font-medium">{call.phone_number}</span>
                   <div className="flex items-center gap-2">
-                    {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score >= 0.8 && (
-                      <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium border border-orange-500/30">
-                        ⚠️ Anomaly
-                      </span>
+                    {call.insights && call.insights.churn_score !== undefined && call.insights.churn_score !== null && call.insights.churn_score >= 0.8 && (
+                      <span className="text-xs" title={`Churn Risk: ${call.insights.churn_score.toFixed(1)}`}>⚠️</span>
+                    )}
+                    {call.insights && call.insights.revenue_interest_score !== undefined && call.insights.revenue_interest_score !== null && call.insights.revenue_interest_score >= 0.8 && (
+                      <span className="text-xs" title={`Revenue Interest: ${call.insights.revenue_interest_score.toFixed(1)}`}>💰</span>
                     )}
                     <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(call.status)}`}>
                       {call.status}
@@ -522,28 +545,6 @@ export default function CallsList() {
                     </div>
                   )}
 
-                  {/* Anomaly Score */}
-                  {insights.anomaly_score !== undefined && insights.anomaly_score !== null && insights.anomaly_score >= 0.8 && (
-                    <div className="mb-4">
-                      <p className="text-sm text-gray-400 mb-2">Anomaly Score</p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
-                          <div
-                            className="h-full transition-all bg-orange-500"
-                            style={{ width: `${insights.anomaly_score * 100}%` }}
-                          ></div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-orange-400">
-                            {insights.anomaly_score.toFixed(2)}
-                          </span>
-                          <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                            Anomaly
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Extracted At */}
                   {insights.extracted_at && (

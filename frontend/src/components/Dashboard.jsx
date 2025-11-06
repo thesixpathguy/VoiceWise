@@ -20,6 +20,9 @@ export default function Dashboard({ setCurrentPage }) {
   const [activeRevenueTab, setActiveRevenueTab] = useState(false);
   const [selectedChurnCall, setSelectedChurnCall] = useState(null);
   const [selectedRevenueCall, setSelectedRevenueCall] = useState(null);
+  const [sentimentChartType, setSentimentChartType] = useState('area'); // 'area', 'line', 'stackedBar', 'radar'
+  const [churnChartType, setChurnChartType] = useState('avgLine'); // 'avgLine', 'scatter'
+  const [revenueChartType, setRevenueChartType] = useState('avgLine'); // 'avgLine', 'scatter'
 
   useEffect(() => {
     loadDashboard();
@@ -112,12 +115,23 @@ export default function Dashboard({ setCurrentPage }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4">
-      {/* Dashboard Title */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+      {/* Aesthetic Divider for Business Health Analysis Section */}
+      <div className="mb-8 relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+        </div>
+        <div className="relative flex justify-center">
+          <div className="bg-gray-900 px-5 py-2.5 rounded-full border border-gray-700 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-base text-gray-400 font-medium">Business Health Analysis</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ===== SECTION 1: GENERIC SECTION ===== */}
+      {/* ===== SECTION 1: BUSINESS HEALTH ANALYSIS SECTION ===== */}
       <div className="mb-6">
         {/* Compact Layout: Stats + Chart in one row, Pain Points + Opportunities below */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
@@ -213,10 +227,60 @@ export default function Dashboard({ setCurrentPage }) {
 
           {/* Sentiment Trend Chart - Wider and Higher */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 lg:col-span-2">
-            <h3 className="text-sm font-semibold text-white mb-2">Sentiment Trend</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-white">Sentiment Trend</h3>
+              {/* Chart Type Selector */}
+              <div className="flex items-center gap-1 bg-gray-900/50 border border-gray-700 rounded-lg p-1 flex-wrap">
+                <button
+                  onClick={() => setSentimentChartType('area')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    sentimentChartType === 'area'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Area Chart"
+                >
+                  Area
+                </button>
+                <button
+                  onClick={() => setSentimentChartType('line')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    sentimentChartType === 'line'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Line Chart"
+                >
+                  Line
+                </button>
+                <button
+                  onClick={() => setSentimentChartType('stackedBar')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    sentimentChartType === 'stackedBar'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Stacked Bar Chart"
+                >
+                  Stacked
+                </button>
+                <button
+                  onClick={() => setSentimentChartType('radar')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    sentimentChartType === 'radar'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Radar Chart"
+                >
+                  Radar
+                </button>
+              </div>
+            </div>
             <div style={{ height: '280px' }}>
               <TrendCharts
                 type="sentiment"
+                chartType={sentimentChartType}
                 gymId={null}
                 days={30}
                 onPointClick={(callId, dateRange, dateStr) => {
@@ -448,10 +512,38 @@ export default function Dashboard({ setCurrentPage }) {
 
           {/* Middle Column: Chart - Wider and Higher */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 lg:col-span-3">
-            <h3 className="text-sm font-semibold text-white mb-2">Churn Risk Trend</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-white">Churn Risk Trend</h3>
+              {/* Chart Type Selector */}
+              <div className="flex items-center gap-1 bg-gray-900/50 border border-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setChurnChartType('avgLine')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    churnChartType === 'avgLine'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Average Line Chart"
+                >
+                  Avg Line
+                </button>
+                <button
+                  onClick={() => setChurnChartType('scatter')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    churnChartType === 'scatter'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Scatter Plot"
+                >
+                  Scatter
+                </button>
+              </div>
+            </div>
             <div style={{ height: '280px' }}>
               <TrendCharts
                 type="churn"
+                chartType={churnChartType}
                 gymId={null}
                 days={30}
                 threshold={churn.churn_threshold || 0.8}
@@ -694,10 +786,38 @@ export default function Dashboard({ setCurrentPage }) {
 
           {/* Middle Column: Chart - Wider and Higher */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 lg:col-span-3">
-            <h3 className="text-sm font-semibold text-white mb-2">Revenue Opportunity Trend</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-white">Revenue Opportunity Trend</h3>
+              {/* Chart Type Selector */}
+              <div className="flex items-center gap-1 bg-gray-900/50 border border-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setRevenueChartType('avgLine')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    revenueChartType === 'avgLine'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Average Line Chart"
+                >
+                  Avg Line
+                </button>
+                <button
+                  onClick={() => setRevenueChartType('scatter')}
+                  className={`px-2 py-1 text-xs rounded transition-all ${
+                    revenueChartType === 'scatter'
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                  title="Scatter Plot"
+                >
+                  Scatter
+                </button>
+              </div>
+            </div>
             <div style={{ height: '280px' }}>
               <TrendCharts
                 type="revenue"
+                chartType={revenueChartType}
                 gymId={null}
                 days={30}
                 threshold={revenue.revenue_threshold || 0.8}
