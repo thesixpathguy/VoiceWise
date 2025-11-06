@@ -19,7 +19,6 @@ from app.schemas.schemas import (
 )
 from app.services.ai_service import AIService
 from app.services.rag_service import RAGService
-from app.services.anomaly_service import AnomalyService
 from app.services.cache_service import CacheService
 
 
@@ -34,7 +33,6 @@ class InsightService:
         self.db = db
         self.ai_service = AIService()
         self.rag_service = RAGService(db)
-        self.anomaly_service = AnomalyService(db)
         
         # Initialize queue if not already initialized
         if InsightService._live_call_queue is None:
@@ -84,25 +82,9 @@ class InsightService:
         rag_context_str = rag_context.to_prompt_context() if rag_context else ""
         insights_data = await self.ai_service.extract_insights(transcript, rag_context_str, custom_instructions)
         
-        # Calculate anomaly score
+        # Anomaly score calculation removed to save latency
+        # The anomaly_score field remains in the database for backward compatibility but is set to None
         anomaly_score = None
-        if rag_context and gym_id:
-            try:
-                print(f"📊 Calculating anomaly score for call {call_id}...")
-                insights_dict = {
-                    'gym_rating': insights_data.gym_rating,
-                    'sentiment': insights_data.sentiment,
-                    'pain_points': insights_data.pain_points,
-                    'confidence': insights_data.confidence,
-                    'topics': insights_data.main_topics
-                }
-                anomaly_score = self.anomaly_service.calculate_anomaly_score(
-                    insights_dict, rag_context, gym_id
-                )
-                print(f"✅ Anomaly score calculated: {anomaly_score:.3f}")
-            except Exception as e:
-                print(f"⚠️ Anomaly score calculation failed: {str(e)}")
-        
         # Check if insights already exist
         existing_insight = self.db.query(Insight).filter(
             Insight.call_id == call_id
