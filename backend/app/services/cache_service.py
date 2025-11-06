@@ -328,6 +328,7 @@ class CacheService:
         churn_min_score: Optional[float] = None,
         revenue_min_score: Optional[float] = None,
         order_by: Optional[str] = None,
+        fields: Optional[List[str]] = None,
         limit: int = 100,
         **kwargs
     ):
@@ -346,6 +347,7 @@ class CacheService:
             churn_min_score: Minimum churn score filter
             revenue_min_score: Minimum revenue score filter
             order_by: Order by parameter
+            fields: List of fields to return (field projection)
             limit: Limit (should be <= 200 for chart queries)
             **kwargs: Additional parameters
         
@@ -368,11 +370,15 @@ class CacheService:
                 churn_min_score=churn_min_score,
                 revenue_min_score=revenue_min_score,
                 order_by=order_by,
+                fields=fields,
                 limit=limit,
                 **kwargs
             )
         
         # Generate cache key for chart queries
+        # Convert fields list to string for cache key generation
+        fields_str = ','.join(sorted(fields)) if fields else None
+        
         cache_key = CacheService._generate_cache_key(
             "chart:calls",
             gym_id=gym_id,
@@ -381,6 +387,7 @@ class CacheService:
             churn_min_score=churn_min_score,
             revenue_min_score=revenue_min_score,
             order_by=order_by,
+            fields=fields_str,
             limit=limit,
             **kwargs
         )
@@ -398,6 +405,7 @@ class CacheService:
             churn_min_score=churn_min_score,
             revenue_min_score=revenue_min_score,
             order_by=order_by,
+            fields=fields,
             limit=limit,
             **kwargs
         )

@@ -63,6 +63,7 @@ async def list_calls(
     end_date: Optional[str] = Query(None, description="Filter by end date (ISO format)"),
     order_by: Optional[str] = Query(None, description="Order results: 'churn_score_desc', 'revenue_score_desc', 'created_at_desc' (default)"),
     limit: int = Query(50, ge=1, le=200, description="Number of calls to return"),
+    fields: Optional[str] = Query(None, description="Comma-separated list of fields to return (e.g., 'call_id,phone_number,status'). If not provided, returns all fields."),
     skip: int = Query(0, ge=0, description="Number of calls to skip"),
     db: Session = Depends(get_db)
 ):
@@ -79,6 +80,7 @@ async def list_calls(
     - **revenue_min_score**: Filter by minimum revenue interest score (for drill-down from revenue section)
     - **order_by**: Order results by score or date (for drill-down to show highest scores first)
     - **limit**: Max number of results (1-200)
+    - **fields**: Comma-separated list of fields to return (field projection). Example: `call_id,phone_number,status,created_at`
     - **skip**: Pagination offset
     
     Returns paginated response with total count
@@ -92,6 +94,11 @@ async def list_calls(
         """Internal function to fetch calls from database"""
         calls, total_count = call_service.get_calls(**kwargs)
         return calls, total_count
+    
+    # Parse field projection parameter
+    field_list = None
+    if fields:
+        field_list = [f.strip() for f in fields.split(',') if f.strip()]
     
     # Use cache for chart queries (date filters + reasonable limit)
     # Skip cache for pagination queries (skip > 0) or queries without date filters
@@ -118,6 +125,7 @@ async def list_calls(
             churn_min_score=churn_min_score,
             revenue_min_score=revenue_min_score,
             order_by=order_by,
+            fields=field_list,
             limit=limit
         )
         
@@ -136,6 +144,7 @@ async def list_calls(
                 churn_min_score=churn_min_score,
                 revenue_min_score=revenue_min_score,
                 order_by=order_by,
+                fields=field_list,
                 limit=limit,
                 skip=0
             )
@@ -154,6 +163,7 @@ async def list_calls(
                 start_date=start_date,
                 end_date=end_date,
                 order_by=order_by,
+                fields=field_list,
                 limit=limit,
                 skip=skip
             )
@@ -481,6 +491,160 @@ async def get_top_revenue_users(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get revenue user segments: {str(e)}")
+
+
+@router.get("/user-segments/custom")
+async def get_custom_filtered_users(
+    gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    rating_operator: Optional[str] = Query(None, description="Rating filter operator: gt, eq, lt"),
+    rating_value: Optional[float] = Query(None, ge=1.0, le=10.0, description="Rating value to compare (1-10)"),
+    date_operator: Optional[str] = Query(None, description="Date filter operator: gt, eq, lt"),
+    date_value: Optional[str] = Query(None, description="Date value to compare (ISO format: YYYY-MM-DD)"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get users based on custom filters (rating and/or date)
+    Returns latest call per phone number that matches the criteria
+    
+    - **gym_id**: Optional gym filter
+    - **rating_operator**: Comparison operator for rating (gt, eq, lt)
+    - **rating_value**: Rating value (1-10) from gym_rating field
+    - **date_operator**: Comparison operator for date (gt, eq, lt)
+    - **date_value**: Date in ISO format (YYYY-MM-DD)
+    - **limit**: Max results (default 100)
+    """
+    call_service = CallService(db)
+    
+    # Validate operators
+    valid_operators = ['gt', 'eq', 'lt']
+    if rating_operator and rating_operator not in valid_operators:
+        raise HTTPException(status_code=400, detail=f"Invalid rating_operator. Must be one of: {valid_operators}")
+    if date_operator and date_operator not in valid_operators:
+        raise HTTPException(status_code=400, detail=f"Invalid date_operator. Must be one of: {valid_operators}")
+    
+    # Validate that at least one filter is provided
+    if not ((rating_operator and rating_value is not None) or (date_operator and date_value)):
+        raise HTTPException(status_code=400, detail="At least one filter (rating or date) must be provided")
+    
+    try:
+        results = call_service.get_custom_filtered_phone_numbers(
+            gym_id=gym_id,
+            rating_operator=rating_operator,
+            rating_value=rating_value,
+            date_operator=date_operator,
+            date_value=date_value,
+            limit=limit
+        )
+        return {
+            "filters": {
+                "rating": f"{rating_operator} {rating_value}" if rating_operator and rating_value is not None else None,
+                "date": f"{date_operator} {date_value}" if date_operator and date_value else None
+            },
+            "total_count": len(results),
+            "phone_numbers": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get custom filtered users: {str(e)}")
+
+
+@router.get("/user-segments/prompt")
+async def get_prompt_filtered_users(
+    gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    prompt: str = Query(..., description="Natural language prompt to find users"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get users based on AI prompt search
+    Uses semantic search through call transcripts and insights to find matching users
+    
+    - **gym_id**: Optional gym filter
+    - **prompt**: Natural language description of users to find
+    - **limit**: Max results (default 100)
+    
+    Examples:
+    - "Find users who mentioned equipment issues"
+    - "Users with rating below 5 who complained about staff"
+    - "Members interested in personal training"
+    """
+    from app.services.search_service import SearchService
+    
+    search_service = SearchService(db)
+    
+    try:
+        # Use semantic search to find matching calls
+        search_results = search_service.search_calls(
+            query=prompt,
+            search_type="nlp",
+            gym_id=gym_id,
+            limit=limit * 2,  # Get more results to account for filtering
+            similarity_threshold=0.7
+        )
+        
+        # Extract unique phone numbers from search results
+        # Get latest call per phone number
+        from app.models.models import Call
+        from sqlalchemy import func, desc
+        
+        # Get unique phone numbers from search results (search_results is a dict with "calls" key)
+        calls_list = search_results.get("calls", [])
+        call_ids = [call["call_id"] for call in calls_list]
+        
+        if not call_ids:
+            return {
+                "prompt": prompt,
+                "total_count": 0,
+                "phone_numbers": []
+            }
+        
+        # Subquery to get latest call per phone number
+        latest_calls_subquery = (
+            db.query(
+                Call.phone_number,
+                func.max(Call.created_at).label('latest_created_at')
+            )
+            .filter(Call.call_id.in_(call_ids))
+            .group_by(Call.phone_number)
+            .subquery()
+        )
+        
+        # Get the actual calls
+        query = (
+            db.query(
+                Call.phone_number,
+                Call.call_id,
+                Call.created_at
+            )
+            .join(
+                latest_calls_subquery,
+                (Call.phone_number == latest_calls_subquery.c.phone_number) &
+                (Call.created_at == latest_calls_subquery.c.latest_created_at)
+            )
+            .filter(Call.call_id.in_(call_ids))
+        )
+        
+        if gym_id:
+            query = query.filter(Call.gym_id == gym_id)
+        
+        query = query.order_by(desc(Call.created_at)).limit(limit)
+        
+        results = query.all()
+        
+        return {
+            "prompt": prompt,
+            "total_count": len(results),
+            "phone_numbers": [
+                {
+                    "phone_number": row.phone_number,
+                    "call_id": row.call_id,
+                    "created_at": row.created_at.isoformat() if row.created_at else None
+                }
+                for row in results
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process prompt search: {str(e)}")
 
 
 @router.get("/phone/{phone_number}/latest", response_model=CallDetail)

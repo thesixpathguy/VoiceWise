@@ -137,6 +137,29 @@ export const callsAPI = {
     return response.data;
   },
   
+  // Get custom filtered user segments
+  getCustomFilteredUsers: async (gymId = null, filters = {}, limit = 100) => {
+    const params = {};
+    if (gymId) params.gym_id = gymId;
+    if (filters.ratingOperator) params.rating_operator = filters.ratingOperator;
+    if (filters.ratingValue !== null && filters.ratingValue !== undefined) params.rating_value = filters.ratingValue;
+    if (filters.dateOperator) params.date_operator = filters.dateOperator;
+    if (filters.dateValue) params.date_value = filters.dateValue;
+    params.limit = limit;
+    const response = await api.get('/api/calls/user-segments/custom', { params });
+    return response.data;
+  },
+  
+  // Get prompt filtered user segments (AI search)
+  getPromptFilteredUsers: async (gymId = null, prompt = '', limit = 100) => {
+    const params = {};
+    if (gymId) params.gym_id = gymId;
+    params.prompt = prompt;
+    params.limit = limit;
+    const response = await api.get('/api/calls/user-segments/prompt', { params });
+    return response.data;
+  },
+  
   // Get latest call by phone number
   getLatestCallByPhone: async (phoneNumber, gymId = null) => {
     const params = {};

@@ -183,6 +183,7 @@ class CallService:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         order_by: Optional[str] = None,  # "churn_score_desc", "revenue_score_desc", "created_at_desc" (default)
+        fields: Optional[List[str]] = None,  # List of fields to return (projection)
         limit: int = 50,
         skip: int = 0
     ) -> tuple[List[Call], int]:
@@ -201,6 +202,7 @@ class CallService:
             start_date: Filter by start date (ISO format string)
             end_date: Filter by end date (ISO format string)
             order_by: Order results ("churn_score_desc", "revenue_score_desc", "created_at_desc")
+            fields: List of fields to return (projection for performance optimization)
             limit: Max results
             skip: Pagination offset
         
@@ -209,9 +211,20 @@ class CallService:
         """
         from app.models.models import Insight
         from datetime import datetime
+        from sqlalchemy.orm import load_only
         
         # Start with base query
         query = self.db.query(Call)
+        
+        # Apply field projection if specified
+        if fields:
+            # Always include 'id' and 'call_id' for proper object handling
+            if 'id' not in fields:
+                fields.insert(0, 'id')
+            if 'call_id' not in fields:
+                fields.insert(1, 'call_id')
+            
+            query = query.options(load_only(*fields))
         
         # Apply basic filters
         if gym_id:
@@ -587,6 +600,104 @@ class CallService:
                 "phone_number": row.phone_number,
                 "call_id": row.call_id,
                 "revenue_interest_score": float(row.revenue_interest_score) if row.revenue_interest_score else None,
+                "created_at": row.created_at.isoformat() if row.created_at else None
+            }
+            for row in results
+        ]
+    
+    def get_custom_filtered_phone_numbers(
+        self,
+        gym_id: Optional[str] = None,
+        rating_operator: Optional[str] = None,
+        rating_value: Optional[float] = None,
+        date_operator: Optional[str] = None,
+        date_value: Optional[str] = None,
+        limit: int = 100
+    ) -> List[dict]:
+        """
+        Get phone numbers filtered by custom criteria (rating and/or date)
+        Returns latest call per phone number that matches the criteria
+        
+        Args:
+            gym_id: Filter by gym ID
+            rating_operator: Comparison operator for gym_rating ('gt', 'eq', 'lt')
+            rating_value: Rating value to compare (1-10)
+            date_operator: Comparison operator for created_at ('gt', 'eq', 'lt')
+            date_value: Date value to compare (ISO format string YYYY-MM-DD)
+            limit: Maximum number of results
+        
+        Returns:
+            List of dicts with phone_number, call_id, gym_rating, created_at
+        """
+        from app.models.models import Insight
+        from sqlalchemy import desc, func, and_, cast, Date
+        from datetime import datetime
+        
+        # Subquery to get latest call per phone number
+        latest_calls_subquery = (
+            self.db.query(
+                Call.phone_number,
+                func.max(Call.created_at).label('latest_created_at')
+            )
+            .group_by(Call.phone_number)
+            .subquery()
+        )
+        
+        # Main query: Join calls with insights, get latest per phone
+        query = (
+            self.db.query(
+                Call.phone_number,
+                Call.call_id,
+                Insight.gym_rating,
+                Call.created_at
+            )
+            .join(Insight, Call.call_id == Insight.call_id)
+            .join(
+                latest_calls_subquery,
+                (Call.phone_number == latest_calls_subquery.c.phone_number) &
+                (Call.created_at == latest_calls_subquery.c.latest_created_at)
+            )
+        )
+        
+        # Apply gym_id filter
+        if gym_id:
+            query = query.filter(Call.gym_id == gym_id)
+        
+        # Apply rating filter
+        if rating_operator and rating_value is not None:
+            if rating_operator == 'gt':
+                query = query.filter(Insight.gym_rating > rating_value)
+            elif rating_operator == 'eq':
+                query = query.filter(Insight.gym_rating == rating_value)
+            elif rating_operator == 'lt':
+                query = query.filter(Insight.gym_rating < rating_value)
+        
+        # Apply date filter
+        if date_operator and date_value:
+            try:
+                # Parse the date value
+                target_date = datetime.strptime(date_value, '%Y-%m-%d').date()
+                
+                if date_operator == 'gt':
+                    query = query.filter(cast(Call.created_at, Date) > target_date)
+                elif date_operator == 'eq':
+                    query = query.filter(cast(Call.created_at, Date) == target_date)
+                elif date_operator == 'lt':
+                    query = query.filter(cast(Call.created_at, Date) < target_date)
+            except ValueError:
+                # If date parsing fails, skip the date filter
+                pass
+        
+        # Order by created_at descending and limit
+        query = query.order_by(desc(Call.created_at)).limit(limit)
+        
+        results = query.all()
+        
+        return [
+            {
+                "phone_number": row.phone_number,
+                "call_id": row.call_id,
+                "gym_rating": float(row.gym_rating) if row.gym_rating else None,
                 "created_at": row.created_at.isoformat() if row.created_at else None
             }
             for row in results
