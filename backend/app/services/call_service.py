@@ -43,8 +43,9 @@ class CallService:
             try:
                 # Add 30-second delay between calls (Bland AI rate limit)
                 if index > 0:
-                    print(f"⏳ Waiting 30 seconds before next call (Bland AI rate limit)...")
-                    await asyncio.sleep(30)
+                    print(f"⏳ Waiting 85 seconds before next call (Bland AI rate limit)...")
+                    print(f"phone_number: {phone_number}")
+                    await asyncio.sleep(85)
                 
                 # Call Bland AI API to initiate call
                 call_id = await self._initiate_bland_call(phone_number, gym_id, custom_instructions)
@@ -711,6 +712,14 @@ class CallService:
                 call = self.get_call_by_id(payload.call_id)
                 phone_number = call.phone_number if call else "unknown"
                 
+                # Get timestamp from payload, call, or current time
+                call_timestamp = payload.timestamp
+                if not call_timestamp and call and call.created_at:
+                    call_timestamp = call.created_at.isoformat()
+                if not call_timestamp:
+                    from datetime import datetime
+                    call_timestamp = datetime.utcnow().isoformat()
+                
                 # Create new LiveCall with first conversation turn
                 new_conversation_turn = ConversationTurn(
                     speaker_type=self.get_speaker_type(payload.message),
@@ -720,7 +729,7 @@ class CallService:
                 live_call = LiveCall(
                     conversation=[new_conversation_turn],
                     sentiment=None,
-                    call_initiated_timestamp=payload.timestamp,
+                    call_initiated_timestamp=call_timestamp,
                     phone_number=phone_number
                 )
                 

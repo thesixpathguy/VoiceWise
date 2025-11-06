@@ -1,4 +1,4 @@
-from backend.app.services.cache_service import CacheService
+from app.services.cache_service import CacheService
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 # Create logs directory if it doesn't exist
 LOGS_DIR = Path(__file__).parent.parent.parent / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
-WEBHOOK_LOG_FILE = LOGS_DIR / "webhook_payloads1.log"
+WEBHOOK_LOG_FILE = LOGS_DIR / "webhook_payloads2.log"
 
 
 def log_payload_to_file(payload: dict, context: str = ""):
@@ -67,7 +67,7 @@ async def bland_ai_webhook(
         raw_payload = await request.json()
         print(f"📨 Raw webhook payload: {json.dumps(raw_payload, indent=2)}")
         # Log all incoming payloads to file
-        log_payload_to_file(raw_payload, context="incoming_webhook")
+        # log_payload_to_file(raw_payload, context="incoming_webhook")
         
         # Validate and parse using Pydantic
         try:
@@ -76,7 +76,7 @@ async def bland_ai_webhook(
             print(f"⚠️ Validation error: {str(e)}")
             print(f"Raw payload: {raw_payload}")
             # Log to file
-            log_payload_to_file(raw_payload, context="validation_error")
+            # log_payload_to_file(raw_payload, context="validation_error")
             # Return success to Bland AI but log the issue
             return {"status": "accepted", "note": "validation_warning"}
         
