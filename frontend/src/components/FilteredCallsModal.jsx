@@ -40,10 +40,24 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
       
       const call = await callsAPI.getCall(callId);
       if (call) {
-        setCalls([call]);
-        // Auto-select the call
-        setSelectedCall(call);
-        loadInsights(call.call_id);
+        // Load insights for this call
+        try {
+          const insights = await callsAPI.getCallInsights(callId);
+          const callWithInsights = {
+            ...call,
+            insights: insights || null
+          };
+          setCalls([callWithInsights]);
+          // Auto-select the call
+          setSelectedCall(callWithInsights);
+          loadInsights(call.call_id);
+        } catch (insightsErr) {
+          console.error('Failed to load insights:', insightsErr);
+          // Still set call even if insights fail
+          setCalls([call]);
+          setSelectedCall(call);
+          loadInsights(call.call_id);
+        }
       } else {
         setError(`Call ${callId} not found`);
       }
@@ -111,7 +125,29 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
         ? response.total 
         : calls.length; // If total not provided, use actual calls length (no estimation)
       
-      setCalls(calls);
+      // Load insights in bulk for all calls
+      if (calls.length > 0) {
+        try {
+          const callIds = calls.map(call => call.call_id);
+          const bulkInsightsResponse = await callsAPI.getBulkInsights(callIds);
+          const insightsMap = bulkInsightsResponse.insights || {};
+          
+          // Merge insights into calls
+          const callsWithInsights = calls.map(call => ({
+            ...call,
+            insights: insightsMap[call.call_id] || null
+          }));
+          
+          setCalls(callsWithInsights);
+        } catch (insightsErr) {
+          console.error('Failed to load insights:', insightsErr);
+          // Still set calls even if insights fail
+          setCalls(calls);
+        }
+      } else {
+        setCalls(calls);
+      }
+      
       setTotalCalls(total);
     } catch (err) {
       setError('Failed to load filtered calls');
@@ -224,10 +260,11 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-white font-medium">{call.phone_number}</span>
                       <div className="flex items-center gap-2">
-                        {call.insights?.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score >= 0.8 && (
-                          <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium border border-orange-500/30">
-                            ⚠️ Anomaly
-                          </span>
+                        {call.insights && call.insights.churn_score !== undefined && call.insights.churn_score !== null && call.insights.churn_score >= 0.8 && (
+                          <span className="text-xs" title={`Churn Risk: ${call.insights.churn_score.toFixed(1)}`}>⚠️</span>
+                        )}
+                        {call.insights && call.insights.revenue_interest_score !== undefined && call.insights.revenue_interest_score !== null && call.insights.revenue_interest_score >= 0.8 && (
+                          <span className="text-xs" title={`Revenue Interest: ${call.insights.revenue_interest_score.toFixed(1)}`}>💰</span>
                         )}
                         <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(call.status)}`}>
                           {call.status}
@@ -569,28 +606,6 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
                           </div>
                         )}
 
-                        {/* Anomaly Score */}
-                        {insights.anomaly_score !== undefined && insights.anomaly_score !== null && insights.anomaly_score >= 0.8 && (
-                          <div className="mb-3">
-                            <p className="text-xs text-gray-400 mb-1">Anomaly Score</p>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-gray-900/50 rounded-full h-2 overflow-hidden">
-                                <div
-                                  className="h-full transition-all bg-orange-500"
-                                  style={{ width: `${insights.anomaly_score * 100}%` }}
-                                ></div>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-medium text-orange-400">
-                                  {insights.anomaly_score.toFixed(2)}
-                                </span>
-                                <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                                  Anomaly
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
 
                         {/* Extracted At */}
                         {insights.extracted_at && (

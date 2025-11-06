@@ -399,13 +399,8 @@ export default function SearchPage({ setCurrentPage }) {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-white font-semibold text-sm">{call.phone_number}</span>
                         <div className="flex items-center gap-1.5">
-                          {call.insights && call.insights.anomaly_score !== undefined && call.insights.anomaly_score !== null && call.insights.anomaly_score >= 0.8 && (
-                            <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                              ⚠️
-                            </span>
-                          )}
                           {call.insights && call.insights.churn_score !== undefined && call.insights.churn_score !== null && call.insights.churn_score >= 0.8 && (
-                            <span className="text-xs" title={`Churn Risk: ${call.insights.churn_score.toFixed(1)}`}>🔴</span>
+                            <span className="text-xs" title={`Churn Risk: ${call.insights.churn_score.toFixed(1)}`}>⚠️</span>
                           )}
                           {call.insights && call.insights.revenue_interest_score !== undefined && call.insights.revenue_interest_score !== null && call.insights.revenue_interest_score >= 0.8 && (
                             <span className="text-xs" title={`Revenue Interest: ${call.insights.revenue_interest_score.toFixed(1)}`}>💰</span>
@@ -770,29 +765,6 @@ export default function SearchPage({ setCurrentPage }) {
                         </div>
                       )}
 
-                      {/* Anomaly Score */}
-                      {((insights && insights.anomaly_score !== undefined && insights.anomaly_score !== null && insights.anomaly_score >= 0.8) || 
-                        (selectedCall.insights && selectedCall.insights.anomaly_score !== undefined && selectedCall.insights.anomaly_score !== null && selectedCall.insights.anomaly_score >= 0.8)) && (
-                        <div className="mt-3">
-                          <span className="text-xs font-medium text-gray-400 block mb-1">Anomaly Score</span>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className="h-full transition-all bg-orange-500"
-                                style={{ width: `${((insights?.anomaly_score || selectedCall.insights?.anomaly_score) || 0) * 100}%` }}
-                              ></div>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-medium text-orange-400">
-                                {(insights?.anomaly_score || selectedCall.insights?.anomaly_score || 0).toFixed(2)}
-                              </span>
-                              <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium border border-orange-500/30">
-                                Anomaly
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Extracted At */}
                       {(insights.extracted_at || (selectedCall.insights && selectedCall.insights.extracted_at)) && (
