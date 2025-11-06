@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Scatter } from 'recharts';
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Scatter, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { callsAPI } from '../api/api';
 
-export default function TrendCharts({ type, gymId, days, onPointClick, threshold = 0.8 }) {
+export default function TrendCharts({ type, gymId, days, onPointClick, threshold = 0.8, chartType = 'area' }) {
   const [data, setData] = useState([]);
   const [scatterData, setScatterData] = useState([]); // Individual points above threshold
   const [loading, setLoading] = useState(true);
@@ -333,14 +333,21 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
       let response;
       if (type === 'sentiment') {
         response = await callsAPI.getSentimentTrend(gymId, days, 'day');
-        const formattedData = response.data.map(item => ({
-          date: item.date,
-          positive: item.positive || 0,
-          negative: item.negative || 0,
-          total: item.total || 0,
-          call_id: item.call_id,
-          dateString: item.date
-        }));
+        const formattedData = response.data.map(item => {
+          const positive = item.positive || 0;
+          const negative = item.negative || 0;
+          const total = item.total || 0;
+          const neutral = total - positive - negative; // Calculate neutral from total
+          return {
+            date: item.date,
+            positive: positive,
+            negative: negative,
+            neutral: neutral >= 0 ? neutral : 0, // Ensure non-negative
+            total: total,
+            call_id: item.call_id,
+            dateString: item.date
+          };
+        });
         setData(formattedData);
       } else if (type === 'churn') {
         response = await callsAPI.getChurnTrend(gymId, days, 'day');
@@ -484,6 +491,9 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
         {type === 'sentiment' ? (
           <div className="space-y-1">
             <p className="text-green-400 text-xs">Positive: {payload.find(p => p.dataKey === 'positive')?.value || 0}</p>
+            {chartType === 'radar' && (
+              <p className="text-gray-400 text-xs">Neutral: {payload.find(p => p.dataKey === 'neutral')?.value || payload[0]?.payload?.neutral || 0}</p>
+            )}
             <p className="text-red-400 text-xs">Negative: {payload.find(p => p.dataKey === 'negative')?.value || 0}</p>
             <p className="text-gray-500 text-xs mt-2">Total: {payload[0]?.payload?.total || 0} calls</p>
           </div>
@@ -509,188 +519,362 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
     );
   };
 
+  // Render sentiment chart based on chartType prop
+  const renderSentimentChart = () => {
+    if (chartType === 'line') {
+      return (
+        <LineChart
+          data={data}
+          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          onClick={handleChartClick}
+          style={{ cursor: 'pointer' }}
+        >
+          <defs>
+            <linearGradient id="colorPositive" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
+            </linearGradient>
+            <linearGradient id="colorNegative" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis
+            dataKey="date"
+            tickFormatter={formatDate}
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <YAxis
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend
+            wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+            iconType="square"
+          />
+          <Line
+            type="monotone"
+            dataKey="positive"
+            stroke="#10b981"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+            name="Positive"
+          />
+          <Line
+            type="monotone"
+            dataKey="negative"
+            stroke="#ef4444"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+            name="Negative"
+          />
+        </LineChart>
+      );
+    } else if (chartType === 'stackedBar') {
+      return (
+        <BarChart
+          data={data}
+          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          onClick={handleChartClick}
+          style={{ cursor: 'pointer' }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis
+            dataKey="date"
+            tickFormatter={formatDate}
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <YAxis
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend
+            wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+            iconType="square"
+          />
+          <Bar
+            dataKey="positive"
+            stackId="1"
+            fill="#10b981"
+            fillOpacity={0.8}
+            name="Positive"
+          />
+          <Bar
+            dataKey="negative"
+            stackId="1"
+            fill="#ef4444"
+            fillOpacity={0.8}
+            name="Negative"
+          />
+        </BarChart>
+      );
+    } else if (chartType === 'radar') {
+      // Transform data for radar chart - aggregate by date or show recent dates
+      // For radar, we'll show the average sentiment distribution
+      const radarData = data.length > 0 ? [
+        {
+          sentiment: 'Positive',
+          value: data.reduce((sum, d) => sum + (d.positive || 0), 0) / data.length
+        },
+        {
+          sentiment: 'Neutral',
+          value: data.reduce((sum, d) => sum + (d.neutral || 0), 0) / data.length
+        },
+        {
+          sentiment: 'Negative',
+          value: data.reduce((sum, d) => sum + (d.negative || 0), 0) / data.length
+        }
+      ] : [];
+
+      // Calculate max value for domain
+      const maxValue = radarData.length > 0 
+        ? Math.max(...radarData.map(d => d.value || 0)) 
+        : 100;
+
+      return (
+        <RadarChart
+          data={radarData}
+          margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+        >
+          <PolarGrid stroke="#374151" />
+          <PolarAngleAxis
+            dataKey="sentiment"
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <PolarRadiusAxis
+            angle={90}
+            domain={[0, maxValue]}
+            stroke="#9ca3af"
+            style={{ fontSize: '10px' }}
+            tick={false}
+          />
+          <Radar
+            name="Sentiment"
+            dataKey="value"
+            stroke="#3b82f6"
+            fill="#3b82f6"
+            fillOpacity={0.6}
+          />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload || !payload.length) return null;
+              return (
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-lg">
+                  <p className="text-gray-300 text-sm mb-1 font-medium">{payload[0]?.payload?.sentiment}</p>
+                  <p className="text-white text-xs">Value: {payload[0]?.value?.toFixed(1) || 0}</p>
+                </div>
+              );
+            }}
+          />
+          <Legend
+            wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+          />
+        </RadarChart>
+      );
+    } else {
+      // Default: area chart (original implementation)
+      return (
+        <AreaChart
+          data={data}
+          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          onClick={handleChartClick}
+          style={{ cursor: 'pointer' }}
+        >
+          <defs>
+            <linearGradient id="colorPositive" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
+            </linearGradient>
+            <linearGradient id="colorNegative" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis
+            dataKey="date"
+            tickFormatter={formatDate}
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <YAxis
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend
+            wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+            iconType="square"
+          />
+          <Area
+            type="monotone"
+            dataKey="positive"
+            stackId="1"
+            stroke="#10b981"
+            fill="url(#colorPositive)"
+            name="Positive"
+          />
+          <Area
+            type="monotone"
+            dataKey="negative"
+            stackId="1"
+            stroke="#ef4444"
+            fill="url(#colorNegative)"
+            name="Negative"
+          />
+        </AreaChart>
+      );
+    }
+  };
+
+  // Render churn/revenue chart based on chartType
+  const renderChurnRevenueChart = () => {
+    if (chartType === 'avgLine') {
+      // Average line chart only
+      const avgData = data.filter(d => d.isAverage).sort((a, b) => (a.dateTimestamp || 0) - (b.dateTimestamp || 0));
+      return (
+        <LineChart
+          data={avgData}
+          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          onClick={handleChartClick}
+          style={{ cursor: 'pointer' }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis
+            dataKey="dateTimestamp"
+            tickFormatter={(timestamp) => {
+              if (!timestamp) return '';
+              const date = new Date(timestamp);
+              const dateStr = date.toISOString().split('T')[0];
+              return formatDate(dateStr);
+            }}
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+            type="number"
+            scale="time"
+            domain={['dataMin', 'dataMax']}
+          />
+          <YAxis
+            domain={[0, 1]}
+            ticks={[0, 0.2, 0.4, 0.6, 0.8, 1.0]}
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+            allowDataOverflow={false}
+            padding={{ top: 0, bottom: 0 }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }} />
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={type === 'churn' ? '#f97316' : '#646cff'}
+            strokeWidth={2}
+            dot={{ r: 6, fill: type === 'churn' ? '#f97316' : '#646cff' }}
+            activeDot={{ r: 8 }}
+            connectNulls={false}
+            name={`Average ${type === 'churn' ? 'Churn' : 'Revenue'} Trend`}
+            isAnimationActive={true}
+          />
+        </LineChart>
+      );
+    } else {
+      // Scatter plot only (with threshold line)
+      const scatterData = data.filter(d => !d.isAverage);
+      return (
+        <ComposedChart
+          data={scatterData}
+          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          onClick={handleChartClick}
+          style={{ cursor: 'pointer' }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis
+            dataKey="dateTimestamp"
+            tickFormatter={(timestamp) => {
+              if (!timestamp) return '';
+              const date = new Date(timestamp);
+              const dateStr = date.toISOString().split('T')[0];
+              return formatDate(dateStr);
+            }}
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+            type="number"
+            scale="time"
+            domain={['dataMin', 'dataMax']}
+          />
+          <YAxis
+            domain={[0, 1]}
+            ticks={[0, 0.2, 0.4, 0.6, 0.8, 1.0]}
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+            allowDataOverflow={false}
+            padding={{ top: 0, bottom: 0 }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }} />
+          <ReferenceLine
+            y={threshold}
+            stroke={type === 'churn' ? '#f97316' : '#3b82f6'}
+            strokeDasharray="5 5"
+            strokeWidth={2}
+            label={{ 
+              value: `Threshold: ${threshold}`, 
+              position: 'right', 
+              fill: type === 'churn' ? '#f97316' : '#3b82f6', 
+              style: { fontSize: '12px' },
+              offset: 10
+            }}
+            ifOverflow="visible"
+          />
+          <Scatter
+            data={scatterData}
+            dataKey="value"
+            fill={type === 'churn' ? '#f97316' : '#3b82f6'}
+            fillOpacity={0.6}
+            name={`Individual Calls (${scatterData.length})`}
+            shape={(props) => {
+              const { cx, cy, payload } = props;
+              if (cx == null || cy == null || !payload) return null;
+              
+              return (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={5}
+                  fill={type === 'churn' ? '#f97316' : '#3b82f6'}
+                  fillOpacity={0.6}
+                  stroke="#fff"
+                  strokeWidth={1}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    if (payload.call_id && onPointClick) {
+                      onPointClick(payload.call_id);
+                    }
+                  }}
+                />
+              );
+            }}
+          />
+        </ComposedChart>
+      );
+    }
+  };
+
   return (
     <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         {type === 'sentiment' ? (
-          <AreaChart
-            data={data}
-            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-            onClick={handleChartClick}
-            style={{ cursor: 'pointer' }}
-          >
-            <defs>
-              <linearGradient id="colorPositive" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
-              </linearGradient>
-              <linearGradient id="colorNegative" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis
-              dataKey="date"
-              tickFormatter={formatDate}
-              stroke="#9ca3af"
-              style={{ fontSize: '12px' }}
-            />
-            <YAxis
-              stroke="#9ca3af"
-              style={{ fontSize: '12px' }}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
-              iconType="square"
-            />
-            <Area
-              type="monotone"
-              dataKey="positive"
-              stackId="1"
-              stroke="#10b981"
-              fill="url(#colorPositive)"
-              name="Positive"
-            />
-            <Area
-              type="monotone"
-              dataKey="negative"
-              stackId="1"
-              stroke="#ef4444"
-              fill="url(#colorNegative)"
-              name="Negative"
-            />
-          </AreaChart>
+          renderSentimentChart()
         ) : (
-          <ComposedChart
-            data={data}
-            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-            onClick={handleChartClick}
-            style={{ cursor: 'pointer' }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis
-              dataKey="dateTimestamp"
-              tickFormatter={(timestamp) => {
-                // Convert timestamp back to date string for formatting
-                if (!timestamp) return '';
-                const date = new Date(timestamp);
-                const dateStr = date.toISOString().split('T')[0];
-                return formatDate(dateStr);
-              }}
-              stroke="#9ca3af"
-              style={{ fontSize: '12px' }}
-              type="number"
-              scale="time"
-              domain={['dataMin', 'dataMax']}
-            />
-            <YAxis
-              domain={[0, 1]}
-              ticks={[0, 0.2, 0.4, 0.6, 0.8, 1.0]}
-              stroke="#9ca3af"
-              style={{ fontSize: '12px' }}
-              allowDataOverflow={false}
-              padding={{ top: 0, bottom: 0 }}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
-            />
-            <ReferenceLine
-              y={threshold}
-              stroke={type === 'churn' ? '#f97316' : '#3b82f6'}
-              strokeDasharray="5 5"
-              strokeWidth={2}
-              label={{ 
-                value: `Threshold: ${threshold}`, 
-                position: 'right', 
-                fill: type === 'churn' ? '#f97316' : '#3b82f6', 
-                style: { fontSize: '12px' },
-                offset: 10
-              }}
-              ifOverflow="visible"
-            />
-            {/* Line connecting average points */}
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#ef4444"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 8 }}
-              connectNulls={false}
-              data={data.filter(d => d.isAverage).sort((a, b) => (a.dateTimestamp || 0) - (b.dateTimestamp || 0))}
-              name={`Average ${type === 'churn' ? 'Churn' : 'Revenue'} Trend`}
-              isAnimationActive={true}
-            />
-            {/* Scatter plot: Individual calls */}
-            <Scatter
-              data={data.filter(d => !d.isAverage)}
-              dataKey="value"
-              fill={type === 'churn' ? '#f97316' : '#3b82f6'}
-              fillOpacity={0.6}
-              name={`Individual Calls (${data.filter(d => !d.isAverage).length})`}
-              shape={(props) => {
-                const { cx, cy, payload } = props;
-                if (cx == null || cy == null || !payload) return null;
-                
-                return (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={5}
-                    fill={type === 'churn' ? '#f97316' : '#3b82f6'}
-                    fillOpacity={0.6}
-                    stroke="#fff"
-                    strokeWidth={1}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      if (payload.call_id && onPointClick) {
-                        onPointClick(payload.call_id);
-                      }
-                    }}
-                  />
-                );
-              }}
-            />
-            {/* Average points in red */}
-            <Scatter
-              data={data.filter(d => d.isAverage)}
-              dataKey="value"
-              fill="#ef4444"
-              fillOpacity={1}
-              name={`Average ${type === 'churn' ? 'Churn' : 'Revenue'} Score`}
-              shape={(props) => {
-                const { cx, cy, payload } = props;
-                if (cx == null || cy == null || !payload) return null;
-                
-                return (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={8}
-                    fill="#ef4444"
-                    fillOpacity={1}
-                    stroke="#fff"
-                    strokeWidth={2}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      if (payload.dateString && onPointClick) {
-                        // Show all calls for that date
-                        const date = new Date(payload.dateString);
-                        const startOfDay = new Date(date);
-                        startOfDay.setHours(0, 0, 0, 0);
-                        const endOfDay = new Date(date);
-                        endOfDay.setHours(23, 59, 59, 999);
-                        onPointClick(null, `${startOfDay.toISOString()}|${endOfDay.toISOString()}`, payload.dateString);
-                      }
-                    }}
-                  />
-                );
-              }}
-            />
-          </ComposedChart>
+          renderChurnRevenueChart()
         )}
       </ResponsiveContainer>
     </div>

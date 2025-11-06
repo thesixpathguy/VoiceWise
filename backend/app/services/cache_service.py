@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from cachetools import TTLCache
 import json
 import hashlib
+from app.schemas.schemas import LiveCall
 
 
 class CacheService:
@@ -452,4 +453,65 @@ class CacheService:
         CacheService._dashboard_cache.clear()
         CacheService._bulk_insights_cache.clear()
         CacheService._chart_calls_cache.clear()
+        CacheService._live_call_cache.clear()
+    
+    # Live call cache (separate from other caches for faster access)
+    _live_call_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL for live calls
+    
+    @staticmethod
+    def get_live_call(call_id: str) -> Optional[LiveCall]:
+        """
+        Get live call data from cache
+        
+        Args:
+            call_id: Call identifier
+            
+        Returns:
+            LiveCall Pydantic model or None
+        """
+        return CacheService._live_call_cache.get(f"live_call_{call_id}")
+    
+    @staticmethod
+    def set_live_call(call_id: str, live_call: LiveCall) -> None:
+        """
+        Store live call data in cache
+        
+        Args:
+            call_id: Call identifier
+            live_call: LiveCall Pydantic model
+        """
+        CacheService._live_call_cache[f"live_call_{call_id}"] = live_call
+    
+    @staticmethod
+    def get_all_live_calls() -> List[LiveCall]:
+        """
+        Get all live calls from cache efficiently.
+        Returns all entries with prefix "live_call_"
+        
+        Optimized for low latency - direct in-memory cache access with minimal overhead.
+        No database queries, no external calls - pure in-memory operation.
+        
+        Returns:
+            List of LiveCall Pydantic models
+        """
+        prefix = "live_call_"
+        live_calls = []
+        
+        # Direct iteration through cache keys - very fast for in-memory cache
+        for key in CacheService._live_call_cache.keys():
+            if isinstance(key, str) and key.startswith(prefix):
+                live_call = CacheService._live_call_cache.get(key)
+                if live_call is not None:
+                    live_calls.append(live_call)
+        
+        return live_calls
 
+    @staticmethod
+    def invalidate_live_call_cache(call_id: str) -> None:
+        """
+        Invalidate live call cache
+        
+        Args:
+            call_id: Call identifier
+        """
+        CacheService._live_call_cache.pop(f"live_call_{call_id}", None)

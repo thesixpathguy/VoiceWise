@@ -116,10 +116,10 @@ class SearchService:
                 "custom_instructions": call.custom_instructions if call.custom_instructions else None,
                 "insights": {
                     "sentiment": insight.sentiment if insight else None,
-                    "topics": insight.topics if insight else [],
+                    "topics": insight.topics if insight and insight.topics else [],
                     "gym_rating": insight.gym_rating if insight else None,
-                    "pain_points": insight.pain_points if insight else [],
-                    "opportunities": insight.opportunities if insight else [],
+                    "pain_points": insight.pain_points if insight and insight.pain_points else [],
+                    "opportunities": insight.opportunities if insight and insight.opportunities else [],
                     "churn_score": insight.churn_score if insight else None,
                     "churn_interest_quote": insight.churn_interest_quote if insight else None,
                     "revenue_interest_score": insight.revenue_interest_score if insight else None,

@@ -32,7 +32,7 @@ class CallDetail(BaseModel):
     """Detailed call information"""
     call_id: str
     phone_number: str
-    status: str
+    status: Optional[str] = None
     duration_seconds: Optional[int] = None
     created_at: datetime
     raw_transcript: Optional[str] = None
@@ -74,12 +74,34 @@ class TimeSeriesResponse(BaseModel):
     end_date: str
 
 
+# Live Call Schemas
+
+# Part of LiveCall
+class ConversationTurn(BaseModel):
+    """Single conversation turn in a live call"""
+    speaker_type: str = Field(..., description="Speaker type: USER or AGENT")
+    speech: str = Field(..., description="What was said in this turn")
+
+# Live Call Model
+class LiveCall(BaseModel):
+    """Live call data structure"""
+    conversation: List[ConversationTurn] = Field(default_factory=list, description="List of conversation turns")
+    sentiment: Optional[str] = Field(None, description="Overall sentiment of the call (None for first analysis)")
+    churn_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Churn risk score 0.0-1.0 (None for first analysis)")
+    revenue_interest_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Revenue interest score 0.0-1.0 (None for first analysis)")
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="AI confidence score 0.0-1.0 (None for first analysis)")
+    call_initiated_timestamp: str = Field(..., description="Timestamp of when the call was initiated.")
+    phone_number: str = Field(..., description="Phone number that was called")
+
 # Webhook Schemas
 
 # External (Bland AI) -> API
 class WebhookPayload(BaseModel):
     """Bland AI webhook payload - flexible to handle various payload structures"""
-    call_id: Optional[str] = Field(None, description="Unique call identifier from Bland AI")
+    timestamp: Optional[str] = Field(None, description="Timestamp of the webhook event")
+    message: Optional[str] = Field(None, description="Agent or user speech message")
+    call_id: Optional[str] = Field(None, description="Unique call identifier")
+    completed: Optional[bool] = Field(None, description="Whether the call is completed")
     to: Optional[str] = Field(None, description="Phone number called (with country code)")
     call_length: Optional[float] = Field(None, description="Call duration in minutes")
     status: Optional[str] = Field(None, description="Call status (completed, failed, etc)")
@@ -279,7 +301,7 @@ class SearchCallResult(BaseModel):
     """Call result in search response"""
     call_id: str
     phone_number: str
-    status: str
+    status: Optional[str] = None
     created_at: str  # ISO format string
     duration_seconds: Optional[int] = None
     raw_transcript: Optional[str] = None

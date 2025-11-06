@@ -1,5 +1,5 @@
 import json
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.schemas.schemas import InsightData
 from app.core.config import settings
 from app.prompts.insight_extraction import INSIGHT_EXTRACTION_PROMPT
@@ -170,3 +170,145 @@ USING THE CONTEXT ABOVE:
         except Exception as e:
             print(f"❌ Insight extraction error: {str(e)}")
             raise
+    
+    async def analyze_live_call(
+        self,
+        user_conversation: str,
+        previous_sentiment: Optional[str] = None,
+        previous_churn_score: Optional[float] = None,
+        previous_revenue_score: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze sentiment, churn, revenue, and confidence from user conversation in live calls (fast, no RAG)
+        
+        Args:
+            user_conversation: Only the USER's conversation turns (not agent)
+            previous_sentiment: Previous sentiment if this is an update (None for first analysis)
+            previous_churn_score: Previous churn score if this is an update (None for first analysis)
+            previous_revenue_score: Previous revenue score if this is an update (None for first analysis)
+        
+        Returns:
+            Dictionary with: sentiment, churn_score, revenue_interest_score, confidence
+        """
+        from app.prompts.live_call_analysis import LIVE_CALL_ANALYSIS_PROMPT
+        
+        if not self.groq_api_key:
+            raise Exception("GROQ_API_KEY is not configured. Please set it in your .env file.")
+        
+        # Default values
+        default_result = {
+            "sentiment": "neutral",
+            "churn_score": 0.0,
+            "revenue_interest_score": 0.0,
+            "confidence": 0.5
+        }
+        
+        if not user_conversation or len(user_conversation.strip()) == 0:
+            return default_result
+        
+        try:
+            prompt = LIVE_CALL_ANALYSIS_PROMPT(
+                user_conversation,
+                previous_sentiment,
+                previous_churn_score,
+                previous_revenue_score
+            )
+            
+            headers = {
+                "Authorization": f"Bearer {self.groq_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert business analyst. Analyze conversation for sentiment, churn risk, revenue interest, and confidence. Return ONLY valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.23,  # Lower temperature for more consistent results
+                "max_tokens": 400  # Slightly more tokens for all fields
+            }
+            
+            import requests
+            import certifi
+            
+            response = requests.post(
+                self.groq_api_url,
+                headers=headers,
+                json=payload,
+                timeout=15.0,  # Shorter timeout for real-time analysis
+                verify=certifi.where()
+            )
+            
+            if response.status_code != 200:
+                print(f"❌ Groq API error {response.status_code}: {response.text}")
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            # Parse AI response
+            content = result["choices"][0]["message"]["content"]
+            
+            # Extract JSON from content (may have markdown code blocks)
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            try:
+                analysis_dict = json.loads(content)
+                
+                # Extract and validate sentiment
+                sentiment = analysis_dict.get("sentiment", "neutral").lower()
+                if sentiment not in ["positive", "neutral", "negative"]:
+                    print(f"⚠️ Invalid sentiment '{sentiment}', defaulting to 'neutral'")
+                    sentiment = "neutral"
+                
+                # Extract and validate churn_score
+                churn_score = analysis_dict.get("churn_score", 0.0)
+                if churn_score is None:
+                    churn_score = 0.0
+                else:
+                    churn_score = round(float(churn_score), 1)
+                    churn_score = max(0.0, min(1.0, churn_score))
+                
+                # Extract and validate revenue_interest_score
+                revenue_score = analysis_dict.get("revenue_interest_score", 0.0)
+                if revenue_score is None:
+                    revenue_score = 0.0
+                else:
+                    revenue_score = round(float(revenue_score), 1)
+                    revenue_score = max(0.0, min(1.0, revenue_score))
+                
+                # Extract and validate confidence
+                confidence = analysis_dict.get("confidence", 0.5)
+                if confidence is None:
+                    confidence = 0.5
+                else:
+                    confidence = round(float(confidence), 2)
+                    confidence = max(0.0, min(1.0, confidence))
+                
+                return {
+                    "sentiment": sentiment,
+                    "churn_score": churn_score,
+                    "revenue_interest_score": revenue_score,
+                    "confidence": confidence
+                }
+            except json.JSONDecodeError as e:
+                print(f"❌ Failed to parse analysis response as JSON: {str(e)}")
+                print(f"Raw content: {content}")
+                return default_result
+            except (ValueError, TypeError) as e:
+                print(f"❌ Failed to parse analysis values: {str(e)}")
+                print(f"Raw content: {content}")
+                return default_result
+        
+        except Exception as e:
+            print(f"❌ Live call analysis error: {str(e)}")
+            return default_result

@@ -14,11 +14,13 @@ from app.schemas.schemas import (
     PaginatedCallsResponse,
     TimeSeriesResponse,
     TimeSeriesDataPoint,
-    CallPickupRateResponse
+    CallPickupRateResponse,
+    LiveCall
 )
 from app.services.call_service import CallService
 from app.services.insight_service import InsightService
 from app.services.search_service import SearchService
+from app.services.cache_service import CacheService
 
 router = APIRouter(prefix="/calls", tags=["Calls"])
 
@@ -560,3 +562,23 @@ async def get_sentiment_trend(
     insight_service = InsightService(db)
     result = insight_service.get_sentiment_trend_data(gym_id, days, period)
     return result
+
+
+@router.get("/live", response_model=List[LiveCall])
+async def get_live_calls():
+    """
+    Get all active live calls from cache.
+    
+    Returns all live calls currently in cache with their real-time analysis
+    (sentiment, churn_score, revenue_interest_score, confidence).
+    
+    This endpoint is optimized for low latency - directly reads from in-memory cache.
+    
+    Returns:
+        List of LiveCall Pydantic models
+    """
+    try:
+        live_calls = CacheService.get_all_live_calls()
+        return live_calls
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch live calls: {str(e)}")
