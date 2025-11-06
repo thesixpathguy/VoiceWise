@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from cachetools import TTLCache
 import json
 import hashlib
+from app.schemas.schemas import LiveCall
 
 
 class CacheService:
@@ -457,7 +458,7 @@ class CacheService:
     _live_call_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL for live calls
     
     @staticmethod
-    def get_live_call(call_id: str) -> Optional[Dict]:
+    def get_live_call(call_id: str) -> Optional[LiveCall]:
         """
         Get live call data from cache
         
@@ -465,20 +466,20 @@ class CacheService:
             call_id: Call identifier
             
         Returns:
-            Live call data dictionary or None
+            LiveCall Pydantic model or None
         """
         return CacheService._live_call_cache.get(f"live_call_{call_id}")
     
     @staticmethod
-    def set_live_call(call_id: str, data: Dict) -> None:
+    def set_live_call(call_id: str, live_call: LiveCall) -> None:
         """
         Store live call data in cache
         
         Args:
             call_id: Call identifier
-            data: Live call data dictionary
+            live_call: LiveCall Pydantic model
         """
-        CacheService._live_call_cache[f"live_call_{call_id}"] = data
+        CacheService._live_call_cache[f"live_call_{call_id}"] = live_call
     
     @staticmethod
     def update_live_call_sentiment(call_id: str, sentiment: str) -> bool:
@@ -493,13 +494,50 @@ class CacheService:
             True if updated, False if call not in cache
         """
         cache_key = f"live_call_{call_id}"
-        live_call_data = CacheService._live_call_cache.get(cache_key)
+        live_call = CacheService._live_call_cache.get(cache_key)
         
-        if live_call_data is None:
+        if live_call is None:
             return False
         
-        # Update only sentiment field
-        live_call_data["sentiment"] = sentiment
-        CacheService._live_call_cache[cache_key] = live_call_data
+        # Update using Pydantic model_copy
+        updated_live_call = live_call.model_copy(update={"sentiment": sentiment})
+        CacheService._live_call_cache[cache_key] = updated_live_call
+        return True
+    
+    @staticmethod
+    def update_live_call_analysis(
+        call_id: str,
+        sentiment: str,
+        churn_score: float,
+        revenue_interest_score: float,
+        confidence: float
+    ) -> bool:
+        """
+        Update analysis fields (sentiment, churn_score, revenue_interest_score, confidence) in live call cache
+        
+        Args:
+            call_id: Call identifier
+            sentiment: New sentiment value
+            churn_score: New churn score value
+            revenue_interest_score: New revenue interest score value
+            confidence: New confidence value
+            
+        Returns:
+            True if updated, False if call not in cache
+        """
+        cache_key = f"live_call_{call_id}"
+        live_call = CacheService._live_call_cache.get(cache_key)
+        
+        if live_call is None:
+            return False
+        
+        # Update all analysis fields using Pydantic model_copy
+        updated_live_call = live_call.model_copy(update={
+            "sentiment": sentiment,
+            "churn_score": churn_score,
+            "revenue_interest_score": revenue_interest_score,
+            "confidence": confidence
+        })
+        CacheService._live_call_cache[cache_key] = updated_live_call
         return True
 

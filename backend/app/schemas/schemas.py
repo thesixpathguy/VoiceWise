@@ -86,6 +86,9 @@ class LiveCall(BaseModel):
     """Live call data structure"""
     conversation: List[ConversationTurn] = Field(default_factory=list, description="List of conversation turns")
     sentiment: Optional[str] = Field(None, description="Overall sentiment of the call (None for first analysis)")
+    churn_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Churn risk score 0.0-1.0 (None for first analysis)")
+    revenue_interest_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Revenue interest score 0.0-1.0 (None for first analysis)")
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="AI confidence score 0.0-1.0 (None for first analysis)")
     call_initiated_timestamp: str = Field(..., description="Timestamp of when the call was initiated.")
     phone_number: str = Field(..., description="Phone number that was called")
 
