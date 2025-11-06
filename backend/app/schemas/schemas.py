@@ -37,6 +37,7 @@ class CallDetail(BaseModel):
     created_at: datetime
     raw_transcript: Optional[str] = None
     custom_instructions: Optional[List[str]] = None  # Custom instructions for this call
+    answered_by: Optional[str] = None  # Who answered the call: human, voicemail, unknown, no-answer
     
     class Config:
         from_attributes = True
@@ -83,7 +84,7 @@ class WebhookPayload(BaseModel):
     call_length: Optional[float] = Field(None, description="Call duration in minutes")
     status: Optional[str] = Field(None, description="Call status (completed, failed, etc)")
     concatenated_transcript: Optional[str] = Field(None, description="Full transcript as a single string")
-    
+    answered_by:Optional[str]=Field(None,description="Who answered the call: human, voicemail, unknown, or no-answer")
     class Config:
         extra = "ignore"  # Allow extra fields from Bland AI
 
@@ -283,6 +284,7 @@ class SearchCallResult(BaseModel):
     duration_seconds: Optional[int] = None
     raw_transcript: Optional[str] = None
     gym_id: Optional[str] = None
+    answered_by: Optional[str] = None  # Who answered the call: human, voicemail, unknown, no-answer
     insights: Optional[SearchCallInsights] = None
 
 

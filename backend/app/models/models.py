@@ -3,6 +3,8 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 from app.core.database import Base
+from sqlalchemy import Enum as SAEnum
+import enum
 
 
 class Call(Base):
@@ -21,6 +23,14 @@ class Call(Base):
     custom_instructions = Column(ARRAY(Text), nullable=True)  # Custom instructions provided for this call
     created_at = Column(TIMESTAMP, server_default=func.now(), index=True)
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    class AnsweredByEnum(str, enum.Enum):
+        human = "human"
+        voicemail = "voicemail"
+        unknown = "unknown"
+        no_answer = "no-answer"
+
+    # Stored as a string in the DB (native_enum=False) to avoid DB-level enum migrations.
+    answered_by = Column(SAEnum(AnsweredByEnum, name="answered_by_enum", native_enum=False), nullable=True, index=True)
     
     # Relationship to insights
     insights = relationship("Insight", back_populates="call", cascade="all, delete-orphan")

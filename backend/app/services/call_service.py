@@ -418,6 +418,9 @@ class CallService:
         if payload.call_length:
             call.duration_seconds = int(payload.call_length * 60)
         
+        if payload.answered_by:
+            call.answered_by = payload.answered_by
+            print(f"📞 Answered by: {payload.answered_by} for call {call.call_id}")
         # Store transcript from concatenated_transcript field
         if payload.concatenated_transcript:
             call.raw_transcript = payload.concatenated_transcript

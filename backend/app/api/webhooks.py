@@ -39,6 +39,9 @@ async def bland_ai_webhook(
         # Validate and parse using Pydantic
         try:
             payload = WebhookPayload(**raw_payload)
+            print(f"✅ Webhook validated for call {payload.call_id}")
+            if payload.answered_by:
+                print(f"📞 Webhook answered_by: {payload.answered_by}")
         except Exception as e:
             print(f"⚠️ Validation error: {str(e)}")
             print(f"Raw payload: {raw_payload}")
