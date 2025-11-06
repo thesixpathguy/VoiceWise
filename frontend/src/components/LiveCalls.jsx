@@ -1,153 +1,113 @@
 import { useState, useEffect, useRef } from 'react';
+import { callsAPI } from '../api/api';
 
 export default function LiveCalls() {
-  // Mock data for live calls - will be replaced with real data later
-  const [liveCalls] = useState([
-    {
-      id: 'call-1',
-      phoneNumber: '+1 (555) 123-4567',
-      agentName: 'Alex',
-      customerName: 'Sarah',
-      startTime: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-      duration: '5:23',
-      sentiment: 'positive',
-      sentimentScore: 0.85,
-      revenueScore: 0.92,
-      churnScore: 0.15,
-      aiConfidence: 0.88,
-      conversation: [
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'Hi Sarah! This is Alex calling from VoiceWise Gym. I wanted to check in and see how your experience has been so far.',
-          timestamp: new Date(Date.now() - 5 * 60 * 1000)
-        },
-        {
-          speaker: 'customer',
-          name: 'Sarah',
-          text: 'Oh hi! Yeah, it\'s been pretty good actually. The equipment is nice and the trainers are helpful.',
-          timestamp: new Date(Date.now() - 4 * 45 * 1000)
-        },
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'That\'s great to hear! On a scale of 1 to 10, how would you rate your overall experience?',
-          timestamp: new Date(Date.now() - 4 * 30 * 1000)
-        },
-        {
-          speaker: 'customer',
-          name: 'Sarah',
-          text: 'I\'d say about an 8. The only thing is it gets really crowded during peak hours. But I\'ve been thinking about trying personal training to help me reach my goals faster.',
-          timestamp: new Date(Date.now() - 3 * 50 * 1000)
-        },
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'That\'s wonderful feedback! I can definitely help you learn more about our personal training programs. What specific goals are you looking to achieve?',
-          timestamp: new Date(Date.now() - 3 * 30 * 1000)
-        },
-        {
-          speaker: 'customer',
-          name: 'Sarah',
-          text: 'I really want to build more strength and maybe lose a bit of weight. I\'ve heard great things about your trainers.',
-          timestamp: new Date(Date.now() - 2 * 45 * 1000)
-        }
-      ]
-    },
-    {
-      id: 'call-2',
-      phoneNumber: '+1 (555) 987-6543',
-      agentName: 'Alex',
-      customerName: 'Mike',
-      startTime: new Date(Date.now() - 12 * 60 * 1000), // 12 minutes ago
-      duration: '12:45',
-      sentiment: 'neutral',
-      sentimentScore: 0.55,
-      revenueScore: 0.35,
-      churnScore: 0.85,
-      aiConfidence: 0.82,
-      conversation: [
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'Hi Mike! This is Alex from VoiceWise Gym. How has your membership been going?',
-          timestamp: new Date(Date.now() - 12 * 60 * 1000)
-        },
-        {
-          speaker: 'customer',
-          name: 'Mike',
-          text: 'Honestly, I haven\'t been going as much as I should. It\'s been hard to find the motivation lately.',
-          timestamp: new Date(Date.now() - 11 * 30 * 1000)
-        },
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'I understand. What would make it easier for you to come in more regularly?',
-          timestamp: new Date(Date.now() - 11 * 10 * 1000)
-        },
-        {
-          speaker: 'customer',
-          name: 'Mike',
-          text: 'I\'m not sure. Maybe if the hours were better, or if there were more classes that fit my schedule. I\'ve been thinking about canceling actually.',
-          timestamp: new Date(Date.now() - 10 * 20 * 1000)
-        },
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'I\'d hate to see you go, Mike. Let me see what we can do to help make this work better for you. What times work best for your schedule?',
-          timestamp: new Date(Date.now() - 9 * 50 * 1000)
-        }
-      ]
-    },
-    {
-      id: 'call-3',
-      phoneNumber: '+1 (555) 456-7890',
-      agentName: 'Alex',
-      customerName: 'Emily',
-      startTime: new Date(Date.now() - 2 * 60 * 1000), // 2 minutes ago
-      duration: '2:15',
-      sentiment: 'positive',
-      sentimentScore: 0.92,
-      revenueScore: 0.78,
-      churnScore: 0.10,
-      aiConfidence: 0.91,
-      conversation: [
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'Hi Emily! This is Alex calling from VoiceWise Gym. I wanted to follow up on your recent visit.',
-          timestamp: new Date(Date.now() - 2 * 60 * 1000)
-        },
-        {
-          speaker: 'customer',
-          name: 'Emily',
-          text: 'Hi Alex! I had such a great time. The new yoga class was amazing!',
-          timestamp: new Date(Date.now() - 1 * 45 * 1000)
-        },
-        {
-          speaker: 'agent',
-          name: 'Alex',
-          text: 'That\'s fantastic! I\'m so glad you enjoyed it. Are you interested in trying any of our other classes?',
-          timestamp: new Date(Date.now() - 1 * 30 * 1000)
-        },
-        {
-          speaker: 'customer',
-          name: 'Emily',
-          text: 'Yes! I\'d love to try the pilates class. When is the next one?',
-          timestamp: new Date(Date.now() - 1 * 10 * 1000)
-        }
-      ]
-    }
-  ]);
-
-  const [activeTab, setActiveTab] = useState(liveCalls[0]?.id || null);
-  const [conversations, setConversations] = useState(
-    liveCalls.reduce((acc, call) => {
-      acc[call.id] = call.conversation || [];
-      return acc;
-    }, {})
-  );
+  const [liveCalls, setLiveCalls] = useState([]);
+  const [activeTab, setActiveTab] = useState(null);
+  const [conversations, setConversations] = useState({});
+  const [loading, setLoading] = useState(true);
   const messagesEndRefs = useRef({});
+
+  // Transform API response to component format
+  const transformLiveCall = (apiCall) => {
+    // Generate a unique ID from phone number and timestamp
+    const callId = `${apiCall.phone_number}_${apiCall.call_initiated_timestamp}`;
+    
+    // Calculate duration from timestamp (will be recalculated on each poll)
+    const startTime = new Date(apiCall.call_initiated_timestamp);
+    const now = new Date();
+    const durationSeconds = Math.floor((now - startTime) / 1000);
+    const minutes = Math.floor(durationSeconds / 60);
+    const seconds = durationSeconds % 60;
+    const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Transform conversation turns from API format (USER/AGENT) to component format (customer/agent)
+    const conversation = (apiCall.conversation || []).map((turn, idx) => {
+      const speaker = turn.speaker_type === 'USER' ? 'customer' : 'agent';
+      return {
+        speaker: speaker,
+        name: speaker === 'agent' ? 'Agent' : 'Customer',
+        text: turn.speech,
+        timestamp: new Date(startTime.getTime() + idx * 1000) // Approximate timestamp
+      };
+    });
+    
+    return {
+      id: callId,
+      phoneNumber: apiCall.phone_number,
+      startTime: startTime,
+      duration: duration,
+      sentiment: apiCall.sentiment || 'neutral', // Default to neutral if null
+      churnScore: apiCall.churn_score !== null && apiCall.churn_score !== undefined ? apiCall.churn_score : null,
+      revenueScore: apiCall.revenue_interest_score !== null && apiCall.revenue_interest_score !== undefined ? apiCall.revenue_interest_score : null,
+      aiConfidence: apiCall.confidence !== null && apiCall.confidence !== undefined ? apiCall.confidence : 0.5, // Default to 50% if null
+      conversation: conversation
+    };
+  };
+
+  // Fetch live calls from API
+  const fetchLiveCalls = async () => {
+    try {
+      const apiCalls = await callsAPI.getLiveCalls();
+      
+      if (!apiCalls || apiCalls.length === 0) {
+        setLiveCalls([]);
+        setActiveTab(null);
+        setConversations({});
+        setLoading(false);
+        return;
+      }
+      
+      // Transform API calls to component format
+      const transformedCalls = apiCalls.map(transformLiveCall);
+      
+      // Update conversations state
+      const newConversations = {};
+      transformedCalls.forEach(call => {
+        newConversations[call.id] = call.conversation || [];
+      });
+      setConversations(newConversations);
+      
+      // Update live calls
+      setLiveCalls(transformedCalls);
+      
+      // Always set first call as active if available and no active tab is set
+      if (transformedCalls.length > 0 && !activeTab) {
+        setActiveTab(transformedCalls[0].id);
+      }
+      
+      // If active tab no longer exists, set first call as active
+      if (activeTab && !transformedCalls.find(c => c.id === activeTab)) {
+        setActiveTab(transformedCalls[0]?.id || null);
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch live calls:', error);
+      setLoading(false);
+      // Don't clear existing calls on error to avoid flickering
+    }
+  };
+
+  // Poll API every 2 seconds
+  useEffect(() => {
+    // Initial fetch
+    fetchLiveCalls();
+    
+    // Set up polling interval
+    const interval = setInterval(() => {
+      fetchLiveCalls();
+    }, 2000); // Poll every 2 seconds
+    
+    return () => clearInterval(interval);
+  }, []); // Only run on mount/unmount
+
+  // Update activeTab when liveCalls change (to ensure first call is always active)
+  useEffect(() => {
+    if (liveCalls.length > 0 && !activeTab) {
+      setActiveTab(liveCalls[0].id);
+    }
+  }, [liveCalls.length]); // Only when length changes
 
   const handleTabClick = (callId) => {
     setActiveTab(callId);
@@ -159,31 +119,6 @@ export default function LiveCalls() {
       messagesEndRefs.current[activeTab]?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [conversations, activeTab]);
-
-  // Simulate live updates for active call
-  useEffect(() => {
-    if (!activeTab) return;
-
-    const interval = setInterval(() => {
-      const currentCall = liveCalls.find(c => c.id === activeTab);
-      if (currentCall && Math.random() > 0.7 && conversations[activeTab]?.length < 15) {
-        const newMessage = {
-          speaker: Math.random() > 0.5 ? 'agent' : 'customer',
-          name: Math.random() > 0.5 ? currentCall.agentName : currentCall.customerName,
-          text: Math.random() > 0.5 
-            ? 'That sounds great! Let me help you with that.'
-            : 'I appreciate your help with this.',
-          timestamp: new Date()
-        };
-        setConversations(prev => ({
-          ...prev,
-          [activeTab]: [...(prev[activeTab] || []), newMessage]
-        }));
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [activeTab, conversations, liveCalls]);
 
   const formatTime = (date) => {
     const now = new Date();
@@ -241,7 +176,12 @@ export default function LiveCalls() {
       </div>
 
       {/* Live Calls Layout */}
-      {liveCalls.length === 0 ? (
+      {loading && liveCalls.length === 0 ? (
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-12 text-center">
+          <span className="text-6xl mb-4 block animate-pulse">📞</span>
+          <p className="text-gray-400 text-lg">Loading live calls...</p>
+        </div>
+      ) : liveCalls.length === 0 ? (
         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-12 text-center">
           <span className="text-6xl mb-4 block">📞</span>
           <p className="text-gray-400 text-lg">No active calls</p>
@@ -283,13 +223,13 @@ export default function LiveCalls() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-gray-400 text-xs">{call.duration}</span>
-                        {call.churnScore >= 0.8 && (
+                        {call.churnScore !== null && call.churnScore >= 0.8 && (
                           <>
                             <span className="text-gray-500">•</span>
                             <span className="text-orange-400 text-xs">⚠️ {call.churnScore.toFixed(1)}</span>
                           </>
                         )}
-                        {call.revenueScore >= 0.8 && (
+                        {call.revenueScore !== null && call.revenueScore >= 0.8 && (
                           <>
                             <span className="text-gray-500">•</span>
                             <span className="text-primary-400 text-xs">💰 {call.revenueScore.toFixed(1)}</span>
@@ -329,7 +269,7 @@ export default function LiveCalls() {
                       </div>
 
                       {/* Revenue Score */}
-                      {activeCall.revenueScore >= 0.8 && (
+                      {activeCall.revenueScore !== null && activeCall.revenueScore >= 0.8 && (
                         <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3">
                           <h4 className="text-xs font-semibold text-primary-400 mb-2 flex items-center gap-2">
                             <span>💰</span>
@@ -352,7 +292,7 @@ export default function LiveCalls() {
                       )}
 
                       {/* Churn Score */}
-                      {activeCall.churnScore >= 0.8 && (
+                      {activeCall.churnScore !== null && activeCall.churnScore >= 0.8 && (
                         <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
                           <h4 className="text-xs font-semibold text-orange-400 mb-2 flex items-center gap-2">
                             <span>⚠️</span>

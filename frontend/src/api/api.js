@@ -166,6 +166,12 @@ export const callsAPI = {
     const response = await api.get('/api/calls/trends/sentiment', { params });
     return response.data;
   },
+
+  // Get all live calls
+  getLiveCalls: async () => {
+    const response = await api.get('/api/calls/live');
+    return response.data;
+  },
 };
 
 // Health check
