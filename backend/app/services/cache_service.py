@@ -453,6 +453,7 @@ class CacheService:
         CacheService._dashboard_cache.clear()
         CacheService._bulk_insights_cache.clear()
         CacheService._chart_calls_cache.clear()
+        CacheService._live_call_cache.clear()
     
     # Live call cache (separate from other caches for faster access)
     _live_call_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL for live calls
@@ -505,3 +506,12 @@ class CacheService:
         
         return live_calls
 
+    @staticmethod
+    def invalidate_live_call_cache(call_id: str) -> None:
+        """
+        Invalidate live call cache
+        
+        Args:
+            call_id: Call identifier
+        """
+        CacheService._live_call_cache.pop(f"live_call_{call_id}", None)

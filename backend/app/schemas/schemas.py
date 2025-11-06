@@ -97,7 +97,10 @@ class LiveCall(BaseModel):
 # External (Bland AI) -> API
 class WebhookPayload(BaseModel):
     """Bland AI webhook payload - flexible to handle various payload structures"""
-    call_id: Optional[str] = Field(None, description="Unique call identifier from Bland AI")
+    timestamp: Optional[str] = Field(None, description="Timestamp of the webhook event")
+    message: Optional[str] = Field(None, description="Agent or user speech message")
+    call_id: Optional[str] = Field(None, description="Unique call identifier")
+    completed: Optional[bool] = Field(None, description="Whether the call is completed")
     to: Optional[str] = Field(None, description="Phone number called (with country code)")
     call_length: Optional[float] = Field(None, description="Call duration in minutes")
     status: Optional[str] = Field(None, description="Call status (completed, failed, etc)")
