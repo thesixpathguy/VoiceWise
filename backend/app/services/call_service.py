@@ -5,8 +5,9 @@ import os
 import asyncio
 from datetime import datetime
 from app.models.models import Call
-from app.schemas.schemas import CallResponse, CallInitiateResponse, WebhookPayload
+from app.schemas.schemas import CallResponse, CallInitiateResponse, WebhookPayload, LiveCall, ConversationTurn
 from app.services.ai_service import AIService
+from app.services.cache_service import CacheService
 from app.core.config import settings
 from app.prompts.call_script import generate_call_script
 
@@ -608,3 +609,81 @@ class CallService:
             query = query.filter(Call.gym_id == gym_id)
         
         return query.order_by(Call.created_at.desc()).first()
+    
+    def get_speaker_type(self, message: str) -> str:
+        """
+        Determine speaker type based on message prefix.
+        
+        Args:
+            message: The message string to analyze
+            
+        Returns:
+            "AGENT" if message begins with "Agent speech:" or "Ending call:", otherwise "USER"
+        """
+        
+        return "AGENT" if (message.startswith("Agent speech:") or message.startswith("Ending call:")) else "USER"
+    
+    def process_live_call_conversation_turn(self, payload: WebhookPayload) -> None:
+        """
+        Process a live call conversation turn from webhook payload.
+        
+        Args:
+            payload: WebhookPayload containing conversation turn data
+        """
+        try:
+            
+            # Get cache entry from live calls cache for call id
+            live_call = CacheService.get_live_call(payload.call_id)
+                        
+            # If absent, create a new LiveCall object
+            if live_call is None:
+                call = self.get_call_by_id(payload.call_id)
+                phone_number = call.phone_number if call else "unknown"
+                
+                # Create new LiveCall with first conversation turn
+                new_conversation_turn = ConversationTurn(
+                    speaker_type=self.get_speaker_type(payload.message),
+                    speech=payload.message
+                )
+                
+                live_call = LiveCall(
+                    conversation=[new_conversation_turn],
+                    sentiment=None,
+                    call_initiated_timestamp=payload.timestamp,
+                    phone_number=phone_number
+                )
+                
+                # Store in cache
+                CacheService.set_live_call(payload.call_id, live_call)
+                
+            else:
+                # Check if the current speaker type matches the last conversation turn's speaker type
+                # Get the current speaker type
+                current_speaker_type = self.get_speaker_type(payload.message)
+                 
+                # Get the last conversation turn's speaker type
+                last_turn = live_call.conversation[-1]
+                last_speaker_type = last_turn.speaker_type
+                 
+                 # Check if speaker types match
+                if last_speaker_type == current_speaker_type:
+                    # Same speaker continuing - update existing turn
+                    updated_conversation = live_call.conversation.copy()
+                    updated_conversation[-1] = ConversationTurn(
+                        speaker_type=current_speaker_type,
+                        speech=payload.message
+                    )
+                    updated_live_call = live_call.model_copy(update={"conversation": updated_conversation})
+                else:
+                    # Different speaker - create new turn
+                    updated_conversation = live_call.conversation.copy()
+                    updated_conversation.append(ConversationTurn(
+                        speaker_type=current_speaker_type,
+                        speech=payload.message
+                    ))
+                    updated_live_call = live_call.model_copy(update={"conversation": updated_conversation})
+                 
+                CacheService.set_live_call(payload.call_id, updated_live_call)
+            
+        except Exception as e:
+            print(f"❌ Error processing live call conversation turn: {str(e)}")
