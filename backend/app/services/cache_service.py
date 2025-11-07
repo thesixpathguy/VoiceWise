@@ -60,31 +60,38 @@ class CacheService:
         cache_type: str,  # 'churn', 'revenue', 'sentiment'
         fetch_func,
         gym_id: Optional[str] = None,
-        days: int = 30,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         period: str = "day",
         **kwargs
     ) -> List[Dict]:
         """
-        Get trend data with caching strategy:
+        Get trend data with caching strategy using date ranges:
         - Cache data up to end of yesterday
         - Fetch today's data fresh from DB
         - Merge cached historical data with fresh today's data
         
         Args:
             cache_type: Type of trend ('churn', 'revenue', 'sentiment')
-            fetch_func: Function to fetch data from DB (should accept days, gym_id, period, etc.)
+            fetch_func: Function to fetch data from DB (should accept start_date, end_date, gym_id, period, etc.)
             gym_id: Optional gym ID filter
-            days: Number of days to fetch
+            start_date: Start date for data range
+            end_date: End date for data range
             period: Period type ('day', 'week', 'month' - for future support)
             **kwargs: Additional parameters to pass to fetch_func
         
         Returns:
             List of trend data points
         """
+        # Convert datetime to string for cache key generation
+        start_str = start_date.isoformat() if start_date else None
+        end_str = end_date.isoformat() if end_date else None
+        
         cache_key = CacheService._generate_cache_key(
             f"trend:{cache_type}",
             gym_id=gym_id,
-            days=days,
+            start_date=start_str,
+            end_date=end_str,
             period=period,
             **kwargs
         )
@@ -98,7 +105,7 @@ class CacheService:
         
         # Cache miss - fetch from database
         # For now, fetch all data (we'll optimize to fetch only today later)
-        data = fetch_func(gym_id=gym_id, days=days, period=period, **kwargs)
+        data = fetch_func(gym_id=gym_id, start_date=start_date, end_date=end_date, period=period, **kwargs)
         
         # Cache the data
         CacheService._trend_cache[cache_key] = data

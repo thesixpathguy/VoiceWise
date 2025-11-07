@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Scatter, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { callsAPI } from '../api/api';
 
-export default function TrendCharts({ type, gymId, days, onPointClick, threshold = 0.8, chartType = 'area' }) {
+export default function TrendCharts({ type, gymId, startDate, endDate, onPointClick, threshold = 0.8, chartType = 'area' }) {
   const [data, setData] = useState([]);
   const [scatterData, setScatterData] = useState([]); // Individual points above threshold
   const [loading, setLoading] = useState(true);
@@ -31,8 +31,8 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
       return date.toISOString().split('T')[0];
     };
     
-    // Create cache key
-    const cacheKey = `${chartType}-${threshold}-${days}`;
+    // Create cache key using date range instead of days
+    const cacheKey = `${chartType}-${threshold}-${startDate}-${endDate}`;
     
     // Return cached data if available
     if (scatterCacheRef.current?.key === cacheKey && scatterCacheRef.current?.data) {
@@ -133,18 +133,19 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
     try {
       loadingScatterRef.current = true;
       
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
+      // Parse DD-MM-YYYY format to Date objects
+      const [startDay, startMonth, startYear] = startDate.split('-');
+      const [endDay, endMonth, endYear] = endDate.split('-');
+      const startDateObj = new Date(startYear, startMonth - 1, startDay);
+      const endDateObj = new Date(endYear, endMonth - 1, endDay);
       
       // Fetch calls - optimized: limit to 100 for better performance
       // We can still show all calls but with a smaller dataset for faster rendering
       const params = {
         limit: 100, // Reduced from 200 to 100 for better performance
         skip: 0,
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
+        start_date: startDateObj.toISOString(),
+        end_date: endDateObj.toISOString(),
       };
       
       // Order by score descending to show highest scores first
@@ -323,16 +324,24 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
     } finally {
       loadingScatterRef.current = false;
     }
-  }, [threshold, days]);
+  }, [threshold, startDate, endDate]);
 
   const loadTrendData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Validate required parameters
+      if (!startDate || !endDate) {
+        console.error('TrendCharts: Missing required date parameters', { startDate, endDate, type });
+        setError('Missing date parameters');
+        setData([]);
+        return;
+      }
+
       let response;
       if (type === 'sentiment') {
-        response = await callsAPI.getSentimentTrend(gymId, days, 'day');
+        response = await callsAPI.getSentimentTrend(gymId, startDate, endDate, 'day');
         const formattedData = response.data.map(item => {
           const positive = item.positive || 0;
           const negative = item.negative || 0;
@@ -350,7 +359,7 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
         });
         setData(formattedData);
       } else if (type === 'churn') {
-        response = await callsAPI.getChurnTrend(gymId, days, 'day');
+        response = await callsAPI.getChurnTrend(gymId, startDate, endDate, 'day');
         // Normalize date helper (inline for this scope)
         const normalizeDateStr = (dateStr) => {
           if (!dateStr) return '';
@@ -377,13 +386,15 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
         setData(formattedData);
         // Defer scatter data loading to improve initial render performance
         // Load scatter data after a short delay so trend chart appears first
-        setTimeout(() => {
-          loadScatterData('churn', formattedData).catch(err => {
-            console.error('Error loading scatter data:', err);
-          });
-        }, 100);
+        if (startDate && endDate) {
+          setTimeout(() => {
+            loadScatterData('churn', formattedData).catch(err => {
+              console.error('Error loading scatter data:', err);
+            });
+          }, 100);
+        }
       } else if (type === 'revenue') {
-        response = await callsAPI.getRevenueTrend(gymId, days, 'day');
+        response = await callsAPI.getRevenueTrend(gymId, startDate, endDate, 'day');
         // Normalize date helper (inline for this scope)
         const normalizeDateStr = (dateStr) => {
           if (!dateStr) return '';
@@ -409,11 +420,13 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
         });
         setData(formattedData);
         // Defer scatter data loading to improve initial render performance
-        setTimeout(() => {
-          loadScatterData('revenue', formattedData).catch(err => {
-            console.error('Error loading scatter data:', err);
-          });
-        }, 100);
+        if (startDate && endDate) {
+          setTimeout(() => {
+            loadScatterData('revenue', formattedData).catch(err => {
+              console.error('Error loading scatter data:', err);
+            });
+          }, 100);
+        }
       }
     } catch (err) {
       console.error('Error loading trend data:', err);
@@ -422,7 +435,7 @@ export default function TrendCharts({ type, gymId, days, onPointClick, threshold
     } finally {
       setLoading(false);
     }
-  }, [type, gymId, days, loadScatterData]);
+  }, [type, gymId, startDate, endDate, loadScatterData]);
 
   useEffect(() => {
     loadTrendData();

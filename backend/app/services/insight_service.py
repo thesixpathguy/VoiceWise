@@ -163,6 +163,8 @@ class InsightService:
     
     def get_dashboard_summary(
         self, 
+        start_date: str,
+        end_date: str,
         gym_id: Optional[str] = None,
         churn_threshold: float = 0.8,
         revenue_threshold: float = 0.8
@@ -174,6 +176,8 @@ class InsightService:
         3. Revenue interest section (calls with revenue_interest_score > threshold)
         
         Args:
+            start_date: Required start date filter (DD-MM-YYYY format)
+            end_date: Required end date filter (DD-MM-YYYY format)
             gym_id: Optional gym filter
             churn_threshold: Threshold for churn interest filtering (default 0.5)
             revenue_threshold: Threshold for revenue interest filtering (default 0.5)
@@ -181,8 +185,18 @@ class InsightService:
         Returns:
             DashboardSummary with three sections
         """
-        # Base query for calls
+        # Convert string dates from DD-MM-YYYY format to datetime objects
+        from datetime import datetime, timedelta
+        start_dt = datetime.strptime(start_date, "%d-%m-%Y")
+        end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+        # Add 23:59:59 to end_date to include the entire day
+        end_dt_with_time = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+        
+        # Base query for calls with required date range filters
         calls_query = self.db.query(Call)
+        calls_query = calls_query.filter(Call.created_at >= start_dt)
+        calls_query = calls_query.filter(Call.created_at <= end_dt_with_time)
+        
         if gym_id:
             calls_query = calls_query.filter(Call.gym_id == gym_id)
         
@@ -190,8 +204,14 @@ class InsightService:
         
         # Base query for insights - EXCLUDE low confidence (confidence < 0.3)
         insights_query = self.db.query(Insight).filter(Insight.confidence >= 0.3)
+        
+        # Join with Call table for filtering and apply required date range filters
+        insights_query = insights_query.join(Call)
+        insights_query = insights_query.filter(Call.created_at >= start_dt)
+        insights_query = insights_query.filter(Call.created_at <= end_dt_with_time)
+        
         if gym_id:
-            insights_query = insights_query.join(Call).filter(Call.gym_id == gym_id)
+            insights_query = insights_query.filter(Call.gym_id == gym_id)
         
         # ===== GENERIC SECTION =====
         # Count sentiments (only from high-confidence insights)
@@ -667,16 +687,23 @@ class InsightService:
     def get_churn_trend_data(
         self,
         gym_id: Optional[str] = None,
-        days: int = 30,
+        start_date: str = None,
+        end_date: str = None,
         period: str = "day"
     ) -> List[Dict]:
         """Get churn score trend data over time - CACHED"""
+        # Convert string dates from DD-MM-YYYY format to datetime objects
+        from datetime import datetime
+        start_dt = datetime.strptime(start_date, "%d-%m-%Y") if start_date else None
+        end_dt = datetime.strptime(end_date, "%d-%m-%Y") if end_date else None
+        
         # Use simple full caching for better performance (cache entire result)
         return CacheService.get_trend_data(
             cache_type='churn',
             fetch_func=lambda **kwargs: self._fetch_churn_trend_data_from_db(**kwargs),
             gym_id=gym_id,
-            days=days,
+            start_date=start_dt,
+            end_date=end_dt,
             period=period
         )
     
@@ -735,16 +762,23 @@ class InsightService:
     def get_revenue_trend_data(
         self,
         gym_id: Optional[str] = None,
-        days: int = 30,
+        start_date: str = None,
+        end_date: str = None,
         period: str = "day"
     ) -> List[Dict]:
         """Get revenue interest score trend data over time - CACHED"""
+        # Convert string dates from DD-MM-YYYY format to datetime objects
+        from datetime import datetime
+        start_dt = datetime.strptime(start_date, "%d-%m-%Y") if start_date else None
+        end_dt = datetime.strptime(end_date, "%d-%m-%Y") if end_date else None
+        
         # Use simple full caching for better performance (cache entire result)
         return CacheService.get_trend_data(
             cache_type='revenue',
             fetch_func=lambda **kwargs: self._fetch_revenue_trend_data_from_db(**kwargs),
             gym_id=gym_id,
-            days=days,
+            start_date=start_dt,
+            end_date=end_dt,
             period=period
         )
     
@@ -821,27 +855,30 @@ class InsightService:
     def get_sentiment_trend_data(
         self,
         gym_id: Optional[str] = None,
-        days: int = 30,
+        start_date: str = None,
+        end_date: str = None,
         period: str = "day"
     ) -> Dict:
         """Get sentiment distribution trend data over time - CACHED"""
+        # Convert string dates from DD-MM-YYYY format to datetime objects
+        from datetime import datetime
+        start_dt = datetime.strptime(start_date, "%d-%m-%Y") if start_date else None
+        end_dt = datetime.strptime(end_date, "%d-%m-%Y") if end_date else None
+        
         # Use simple full caching for better performance (cache entire result)
         trend_data = CacheService.get_trend_data(
             cache_type='sentiment',
             fetch_func=lambda **kwargs: self._fetch_sentiment_trend_data_from_db(**kwargs),
             gym_id=gym_id,
-            days=days,
+            start_date=start_dt,
+            end_date=end_dt,
             period=period
         )
-        
-        # Calculate date range for metadata
-        end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=days)
-        
+
         return {
             "data": trend_data,
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat()
+            "start_date": start_dt.isoformat(),
+            "end_date": end_dt.isoformat()
         }
     
     def queue_live_call_analysis(self, live_call: LiveCall, call_id: str) -> bool:
