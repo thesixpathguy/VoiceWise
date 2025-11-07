@@ -12,15 +12,28 @@ export default function LiveCalls() {
   const [audioError, setAudioError] = useState(null);
   const messagesEndRefs = useRef({});
 
+  const parseTimestamp = (timestamp) => {
+    if (!timestamp) return new Date();
+
+    const trimmed = String(timestamp).trim();
+    // If timestamp already contains timezone info, use as-is
+    if (/Z$/i.test(trimmed) || /[+-]\d{2}:?\d{2}$/.test(trimmed)) {
+      return new Date(trimmed);
+    }
+
+    // Otherwise treat it as UTC by appending Z
+    return new Date(`${trimmed}Z`);
+  };
+
   // Transform API response to component format
   const transformLiveCall = (apiCall) => {
     // Generate a unique ID from phone number and timestamp
     const callId = `${apiCall.phone_number}_${apiCall.call_initiated_timestamp}`;
     
     // Calculate duration from timestamp (will be recalculated on each poll)
-    const startTime = new Date(apiCall.call_initiated_timestamp);
+    const startTime = parseTimestamp(apiCall.call_initiated_timestamp);
     const now = new Date();
-    const durationSeconds = Math.floor((now - startTime) / 1000);
+    const durationSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
     const minutes = Math.floor(durationSeconds / 60);
     const seconds = durationSeconds % 60;
     const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
