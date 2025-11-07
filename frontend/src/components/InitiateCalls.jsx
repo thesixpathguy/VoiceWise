@@ -5,11 +5,19 @@ export default function InitiateCalls() {
   const [phoneNumbers, setPhoneNumbers] = useState('');
   const [gymId, setGymId] = useState('gym_001');
   const [customInstructions, setCustomInstructions] = useState(['']);
-  const [showCustomInstructions, setShowCustomInstructions] = useState(false);
+  const [showCustomInstructions, setShowCustomInstructions] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [searchSegment, setSearchSegment] = useState(null);
+  
+  // Prompt modal state
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [userPrompt, setUserPrompt] = useState('');
+  const [promptModalError, setPromptModalError] = useState(null);
+  
+  // Info card state
+  const [showInfo, setShowInfo] = useState(false);
 
   // Check for phone numbers and search segment from localStorage on mount
   useEffect(() => {
@@ -68,6 +76,34 @@ export default function InitiateCalls() {
     }
   };
 
+  const handleApplyPrompt = async () => {
+    if (!userPrompt.trim()) {
+      setPromptModalError('Please enter a prompt');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      setPromptModalError(null);
+      setResult(null);
+      setShowPromptModal(false);
+      
+      const data = await callsAPI.getPromptFilteredUsers(gymId, userPrompt.trim(), 100);
+      if (data && data.phone_numbers && data.phone_numbers.length > 0) {
+        const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
+        setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
+      } else {
+        setError('No users found matching the prompt');
+      }
+    } catch (err) {
+      setShowPromptModal(false);
+      setError('Failed to load prompt filtered numbers: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Header */}
@@ -116,10 +152,10 @@ export default function InitiateCalls() {
       {/* Form */}
       <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Gym ID */}
+          {/* User ID */}
           <div>
             <label htmlFor="gymId" className="block text-sm font-medium text-gray-300 mb-2">
-              Gym ID
+              User ID
             </label>
             <input
               type="text"
@@ -131,20 +167,137 @@ export default function InitiateCalls() {
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              Identifier for tracking calls to this gym
+              Identifier for tracking calls to this user
             </p>
+          </div>
+
+          {/* User Segments */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-3">
+              User Segment
+            </label>
+            <div className="grid grid-cols-4 gap-4">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    setError(null);
+                    setResult(null);
+                    const data = await callsAPI.getTopChurnUsers(gymId, 0.8, 100);
+                    if (data && data.phone_numbers && data.phone_numbers.length > 0) {
+                      const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
+                      setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
+                    } else {
+                      setError('No churn interest numbers found');
+                    }
+                  } catch (err) {
+                    setError('Failed to load churn numbers: ' + err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="py-2 px-3 bg-orange-500/10 text-orange-400 border border-orange-500/30 rounded-lg hover:bg-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                title="Add high-risk users (churn score ≥ 0.8)"
+              >
+                <span className="text-lg">⚠️</span>
+                <span className="text-xs font-medium">Churn</span>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    setError(null);
+                    setResult(null);
+                    // Get users with TOP 3 most common concerns
+                    const data = await callsAPI.getPainPointUsers(gymId, null, 100);
+                    if (data && data.phone_numbers && data.phone_numbers.length > 0) {
+                      const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
+                      setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
+                    } else {
+                      setError('No users found with top concerns');
+                    }
+                  } catch (err) {
+                    setError('Failed to load users with top concerns: ' + err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="py-2 px-3 bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                title="Add users who reported the 3 most common concerns"
+              >
+                <span className="text-lg">🎯</span>
+                <span className="text-xs font-medium">Top Concerns</span>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    setError(null);
+                    setResult(null);
+                    const data = await callsAPI.getTopRevenueUsers(gymId, 0.8, 100);
+                    if (data && data.phone_numbers && data.phone_numbers.length > 0) {
+                      const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
+                      setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
+                    } else {
+                      setError('No revenue interest numbers found');
+                    }
+                  } catch (err) {
+                    setError('Failed to load revenue numbers: ' + err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="py-2 px-3 bg-primary-500/10 text-primary-400 border border-primary-500/30 rounded-lg hover:bg-primary-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                title="Add high-value users (revenue score ≥ 0.8)"
+              >
+                <span className="text-lg">💰</span>
+                <span className="text-xs font-medium">Revenue</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPromptModal(true)}
+                disabled={loading}
+                className="py-2 px-3 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                title="Find users using AI prompt"
+              >
+                <span className="text-lg">✨</span>
+                <span className="text-xs font-medium">Prompt</span>
+              </button>
+            </div>
           </div>
 
           {/* Phone Numbers */}
           <div>
-            <label htmlFor="phoneNumbers" className="block text-sm font-medium text-gray-300 mb-2">
-              Member Phone Numbers
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="phoneNumbers" className="block text-sm font-medium text-gray-300">
+              Member contact
+              </label>
+              {phoneNumbers && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Clear all phone numbers?')) {
+                      setPhoneNumbers('');
+                    }
+                  }}
+                  className="px-2 py-1 text-xs text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
+                  title="Clear all phone numbers"
+                >
+                  ✕ Clear
+                </button>
+              )}
+            </div>
             <textarea
               id="phoneNumbers"
               value={phoneNumbers}
               onChange={(e) => setPhoneNumbers(e.target.value)}
-              rows={8}
+              rows={5}
               className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
               placeholder="+1234567890&#10;+1987654321&#10;+1555555555"
               required
@@ -158,7 +311,7 @@ export default function InitiateCalls() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-300">
-                Custom Instructions (Optional)
+                Custom Prompt (Optional)
               </label>
               <button
                 type="button"
@@ -304,32 +457,108 @@ export default function InitiateCalls() {
         </div>
       )}
 
-      {/* Info Card */}
-      <div className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-blue-400 mb-3">How It Works</h3>
-        <ul className="space-y-2 text-sm text-gray-300">
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">1.</span>
-            <span>AI agent calls your gym members using Bland AI</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">2.</span>
-            <span>Conducts friendly conversation gathering feedback about their gym experience</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">3.</span>
-            <span>Call is recorded and automatically transcribed</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">4.</span>
-            <span>AI extracts insights: member satisfaction, concerns, and upsell opportunities</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">5.</span>
-            <span>View results in Dashboard and Calls pages to improve your gym</span>
-          </li>
-        </ul>
+      {/* Collapsible Info Card */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowInfo(!showInfo)}
+          className="w-full flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors"
+        >
+          <span className="text-sm font-semibold text-blue-400">💡 How It Works</span>
+          <span className={`text-blue-400 text-lg transition-transform duration-200 ${showInfo ? 'rotate-180' : ''}`}>
+            ▼
+          </span>
+        </button>
+        
+        {showInfo && (
+          <div className="mt-2 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <ul className="space-y-1 text-xs text-gray-400">
+              <li className="flex items-start gap-2">
+                <span className="text-blue-400">1.</span>
+                <span>AI calls members → Gathers feedback → Records & transcribes</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-400">2.</span>
+                <span>Extracts insights: satisfaction, concerns, opportunities</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-400">3.</span>
+                <span>View results in Dashboard to improve your gym</span>
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
+
+       {/* Prompt Modal */}
+       {showPromptModal && (
+         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+           <div className="bg-gray-800 border border-gray-700 rounded-xl max-w-lg w-full p-6">
+             <div className="flex items-center justify-between mb-6">
+               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                 <span>✨</span>
+                 AI Prompt Search
+               </h2>
+               <button
+                 onClick={() => {
+                   setShowPromptModal(false);
+                   setPromptModalError(null);
+                 }}
+                 className="text-gray-400 hover:text-white transition-colors"
+               >
+                 <span className="text-2xl">×</span>
+               </button>
+             </div>
+
+             <div className="space-y-4">
+              {/* Prompt Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Describe the users you want to find
+                </label>
+                <textarea
+                  value={userPrompt}
+                  onChange={(e) => setUserPrompt(e.target.value)}
+                  placeholder="e.g., Find users who mentioned equipment issues&#10;&#10;or&#10;&#10;Users who have complained about staff"
+                  rows={5}
+                  className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+
+               {/* Info */}
+               <p className="text-xs text-gray-400 bg-gray-900/30 rounded-lg p-3">
+                 ℹ️ AI will search through call recordings to find matching users.
+               </p>
+
+               {/* Error Message */}
+               {promptModalError && (
+                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                   <p className="text-red-400 text-sm">{promptModalError}</p>
+                 </div>
+               )}
+
+               {/* Action Buttons */}
+               <div className="flex gap-3 pt-2">
+                 <button
+                   onClick={() => {
+                     setUserPrompt('');
+                     setPromptModalError(null);
+                   }}
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={handleApplyPrompt}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Searching...' : 'Find Users'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
