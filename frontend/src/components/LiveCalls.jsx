@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { callsAPI } from '../api/api';
 import audioService from '../services/audioService';
 
@@ -9,8 +9,13 @@ export default function LiveCalls() {
   const [loading, setLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioStatus, setAudioStatus] = useState('idle');
-  const [audioError, setAudioError] = useState(null);
   const messagesEndRefs = useRef({});
+  const activeTabRef = useRef(null);
+
+  // Keep activeTabRef in sync with activeTab state
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   // Transform API response to component format
   const transformLiveCall = (apiCall) => {
@@ -52,7 +57,7 @@ export default function LiveCalls() {
   };
 
   // Fetch live calls from API
-  const fetchLiveCalls = async () => {
+  const fetchLiveCalls = useCallback(async () => {
     try {
       const apiCalls = await callsAPI.getLiveCalls();
       
@@ -67,24 +72,29 @@ export default function LiveCalls() {
       // Transform API calls to component format
       const transformedCalls = apiCalls.map(transformLiveCall);
       
+      // Sort calls by start time (newest first) for stable ordering
+      const sortedCalls = transformedCalls.sort((a, b) => 
+        b.startTime.getTime() - a.startTime.getTime()
+      );
+      
       // Update conversations state
       const newConversations = {};
-      transformedCalls.forEach(call => {
+      sortedCalls.forEach(call => {
         newConversations[call.id] = call.conversation || [];
       });
       setConversations(newConversations);
       
-      // Update live calls
-      setLiveCalls(transformedCalls);
+      // Update live calls with sorted order
+      setLiveCalls(sortedCalls);
       
       // Always set first call as active if available and no active tab is set
-      if (transformedCalls.length > 0 && !activeTab) {
-        setActiveTab(transformedCalls[0].id);
+      if (sortedCalls.length > 0 && !activeTabRef.current) {
+        setActiveTab(sortedCalls[0].id);
       }
       
       // If active tab no longer exists, set first call as active
-      if (activeTab && !transformedCalls.find(c => c.id === activeTab)) {
-        setActiveTab(transformedCalls[0]?.id || null);
+      if (activeTabRef.current && !sortedCalls.find(c => c.id === activeTabRef.current)) {
+        setActiveTab(sortedCalls[0]?.id || null);
       }
       
       setLoading(false);
@@ -93,7 +103,7 @@ export default function LiveCalls() {
       setLoading(false);
       // Don't clear existing calls on error to avoid flickering
     }
-  };
+  }, []);
 
   // Poll API every 2 seconds
   useEffect(() => {
@@ -106,14 +116,10 @@ export default function LiveCalls() {
     }, 2000); // Poll every 2 seconds
     
     return () => clearInterval(interval);
-  }, []); // Only run on mount/unmount
+  }, [fetchLiveCalls]);
 
-  // Update activeTab when liveCalls change (to ensure first call is always active)
-  useEffect(() => {
-    if (liveCalls.length > 0 && !activeTab) {
-      setActiveTab(liveCalls[0].id);
-    }
-  }, [liveCalls.length]); // Only when length changes
+  // Don't update activeTab on liveCalls change - keep user's selection
+  // activeTab should only change if the selected call ends
 
   const handleTabClick = (callId) => {
     setActiveTab(callId);
@@ -122,7 +128,6 @@ export default function LiveCalls() {
 
   const handlePlayAudio = async () => {
     try {
-      setAudioError(null);
       setAudioStatus('connecting');
       setIsPlayingAudio(true);
 
@@ -161,14 +166,13 @@ export default function LiveCalls() {
         wsUrl,
         (status) => setAudioStatus(status),
         (error) => {
-          setAudioError(error);
+          console.error('[Audio] Playback error:', error);
           setIsPlayingAudio(false);
           setAudioStatus('error');
         }
       );
     } catch (error) {
       console.error('Error playing audio:', error);
-      setAudioError(error.message);
       setAudioStatus('error');
       setIsPlayingAudio(false);
     }
@@ -178,7 +182,6 @@ export default function LiveCalls() {
     audioService.stopAudioPlayback();
     setIsPlayingAudio(false);
     setAudioStatus('idle');
-    setAudioError(null);
   };
 
   // Auto-scroll to bottom when conversation updates
@@ -187,14 +190,6 @@ export default function LiveCalls() {
       messagesEndRefs.current[activeTab]?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [conversations, activeTab]);
-
-  const formatTime = (date) => {
-    const now = new Date();
-    const diff = Math.floor((now - date) / 1000);
-    if (diff < 60) return `${diff}s`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-    return `${Math.floor(diff / 3600)}h`;
-  };
 
   const getSentimentColor = (sentiment) => {
     switch (sentiment) {
@@ -362,14 +357,6 @@ export default function LiveCalls() {
                             <span>
                               {audioStatus === 'connecting' ? 'Connecting...' : audioStatus === 'playing' ? 'Playing' : audioStatus}
                             </span>
-                          </div>
-                        )}
-
-                        {/* Error Display */}
-                        {audioError && (
-                          <div className="flex items-center gap-1 text-xs text-red-400">
-                            <span>⚠️</span>
-                            <span>{audioError}</span>
                           </div>
                         )}
                       </div>

@@ -736,8 +736,16 @@ class CallService:
             # If absent, create a new LiveCall object
             if live_call is None:
                 call = self.get_call_by_id(payload.call_id)
-                phone_number = call.phone_number if call else "unknown"
+                # Try to get phone number from database, then from webhook payload, then default to unknown
+                phone_number = call.phone_number if call else (payload.to if payload.to else "unknown")
                 api_key_index = call.api_key_index if call and hasattr(call, 'api_key_index') else 0
+                
+                # Log the phone number source for debugging
+                if not call:
+                    source = "webhook_payload" if payload.to else "default"
+                    print(f"⚠️ Call {payload.call_id} not in DB, using phone number from {source}: {phone_number}")
+                else:
+                    print(f"✅ Call {payload.call_id} found in DB: {phone_number}")
                 
                 # Get timestamp from payload, call, or current time
                 call_timestamp = payload.timestamp
