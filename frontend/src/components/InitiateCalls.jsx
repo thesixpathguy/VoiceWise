@@ -108,8 +108,20 @@ export default function InitiateCalls() {
     <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">Initiate Calls</h1>
-        <p className="text-gray-400">Start AI-powered voice feedback calls to your gym members</p>
+        <div className="relative flex justify-center mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+          </div>
+          <div className="relative flex justify-center">
+            <div className="bg-gray-900 px-5 py-2.5 rounded-full border border-gray-700 shadow-lg backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse"></div>
+                <span className="text-base text-gray-400 font-medium">Initiate Calls</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search Segment Info */}
