@@ -222,6 +222,13 @@ class InsightService:
         if total_calls > 0:
             completed_calls = calls_query.filter(Call.status == 'completed').count()
             pickup_rate = round((completed_calls / total_calls) * 100, 1) if total_calls > 0 else 0.0
+
+        # Calculate average gym rating across all calls (where rating is available)
+        average_rating = None
+        avg_rating_query = insights_query.filter(Insight.gym_rating.isnot(None)).with_entities(func.avg(Insight.gym_rating))
+        avg_rating_value = avg_rating_query.scalar()
+        if avg_rating_value is not None:
+            average_rating = round(float(avg_rating_value), 1)
         
         # Top pain points from all calls
         top_pain_points = self._get_top_pain_points(gym_id, limit=5)
@@ -237,6 +244,7 @@ class InsightService:
             total_duration_seconds=total_duration,
             average_duration_seconds=avg_duration,
             call_pickup_rate=pickup_rate,
+            average_gym_rating=average_rating,
             block_1=None,  # Placeholder - can be updated later
             block_2=None,  # Placeholder - can be updated later
             top_pain_points=top_pain_points,

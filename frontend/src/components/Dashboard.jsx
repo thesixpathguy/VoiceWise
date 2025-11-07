@@ -142,8 +142,8 @@ export default function Dashboard({ setCurrentPage }) {
               onClick={() => setCurrentPage('calls')}
               className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 cursor-pointer hover:bg-purple-500/20 transition-all flex flex-col items-center justify-center"
             >
-              <span className="text-gray-400 text-xs mb-0.5">Call Total</span>
-              <p className="text-lg font-bold text-purple-400">{generic.total_calls || 0}</p>
+              <span className="text-gray-400 text-sm mb-0.5">Total Calls</span>
+              <p className="text-xl font-bold text-purple-400">{generic.total_calls || 0}</p>
             </div>
 
             {/* Positive Sentiment - Green, Clickable */}
@@ -151,8 +151,8 @@ export default function Dashboard({ setCurrentPage }) {
               onClick={() => openFilterModal('sentiment', 'positive', `Positive Sentiment Calls (${generic.positive_sentiment || 0})`)}
               className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 cursor-pointer hover:bg-green-500/20 transition-all flex flex-col items-center justify-center"
             >
-              <span className="text-gray-400 text-xs mb-0.5">Call Positive</span>
-              <p className="text-lg font-bold text-green-400">{generic.positive_sentiment || 0}</p>
+              <span className="text-gray-400 text-sm mb-0.5">Positive Calls</span>
+              <p className="text-xl font-bold text-green-400">{generic.positive_sentiment || 0}</p>
             </div>
 
             {/* Negative Sentiment - Red, Clickable */}
@@ -160,10 +160,29 @@ export default function Dashboard({ setCurrentPage }) {
               onClick={() => openFilterModal('sentiment', 'negative', `Negative Sentiment Calls (${generic.negative_sentiment || 0})`)}
               className="bg-red-500/10 border border-red-500/30 rounded-lg p-2 cursor-pointer hover:bg-red-500/20 transition-all flex flex-col items-center justify-center"
             >
-              <span className="text-gray-400 text-xs mb-0.5">Call Negative</span>
-              <p className="text-lg font-bold text-red-400">{generic.negative_sentiment || 0}</p>
+              <span className="text-gray-400 text-sm mb-0.5">Negative Calls</span>
+              <p className="text-xl font-bold text-red-400">{generic.negative_sentiment || 0}</p>
             </div>
 
+            {/* Additional Metrics Row */}
+            <div className="grid grid-cols-3 gap-2 col-span-3">
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
+                <span className="text-gray-400 text-sm mb-0.5">Avg Rating</span>
+                <p className="text-xl font-bold text-white">
+                  {generic.average_gym_rating !== null && generic.average_gym_rating !== undefined
+                    ? `${generic.average_gym_rating}/10`
+                    : 'N/A'}
+                </p>
+              </div>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
+                <span className="text-gray-400 text-sm mb-0.5">Placeholder Metric</span>
+                <p className="text-xl font-bold text-white">NA</p>
+              </div>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
+                <span className="text-gray-400 text-sm mb-0.5">Placeholder Metric</span>
+                <p className="text-xl font-bold text-white">NA</p>
+              </div>
+            </div>
           </div>
 
           {/* Sentiment Trend Chart - Wider and Higher */}
