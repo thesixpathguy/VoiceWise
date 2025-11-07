@@ -137,16 +137,13 @@ export const callsAPI = {
     return response.data;
   },
   
-  // Get custom filtered user segments
-  getCustomFilteredUsers: async (gymId = null, filters = {}, limit = 100) => {
+  // Get pain point user segments
+  getPainPointUsers: async (gymId = null, painPoint = null, limit = 100) => {
     const params = {};
     if (gymId) params.gym_id = gymId;
-    if (filters.ratingOperator) params.rating_operator = filters.ratingOperator;
-    if (filters.ratingValue !== null && filters.ratingValue !== undefined) params.rating_value = filters.ratingValue;
-    if (filters.dateOperator) params.date_operator = filters.dateOperator;
-    if (filters.dateValue) params.date_value = filters.dateValue;
+    if (painPoint) params.pain_point = painPoint;
     params.limit = limit;
-    const response = await api.get('/api/calls/user-segments/custom', { params });
+    const response = await api.get('/api/calls/user-segments/pain-points', { params });
     return response.data;
   },
   

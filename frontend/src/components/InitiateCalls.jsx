@@ -11,20 +11,13 @@ export default function InitiateCalls() {
   const [error, setError] = useState(null);
   const [searchSegment, setSearchSegment] = useState(null);
   
-  // Custom filter modal state
-  const [showCustomModal, setShowCustomModal] = useState(false);
-  const [customFilters, setCustomFilters] = useState({
-    ratingOperator: '',
-    ratingValue: '',
-    dateOperator: '',
-    dateValue: ''
-  });
-  const [customModalError, setCustomModalError] = useState(null);
-  
   // Prompt modal state
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [userPrompt, setUserPrompt] = useState('');
   const [promptModalError, setPromptModalError] = useState(null);
+  
+  // Info card state
+  const [showInfo, setShowInfo] = useState(false);
 
   // Check for phone numbers and search segment from localStorage on mount
   useEffect(() => {
@@ -78,38 +71,6 @@ export default function InitiateCalls() {
     } catch (err) {
       setError('Failed to initiate calls: ' + err.message);
       console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleApplyCustomFilters = async () => {
-    // Validate that at least one filter is set
-    const hasRatingFilter = customFilters.ratingOperator && customFilters.ratingValue;
-    const hasDateFilter = customFilters.dateOperator && customFilters.dateValue;
-    
-    if (!hasRatingFilter && !hasDateFilter) {
-      setCustomModalError('Please set at least one filter (rating or date)');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      setError(null);
-      setCustomModalError(null);
-      setResult(null);
-      setShowCustomModal(false);
-      
-      const data = await callsAPI.getCustomFilteredUsers(gymId, customFilters, 100);
-      if (data && data.phone_numbers && data.phone_numbers.length > 0) {
-        const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
-        setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
-      } else {
-        setError('No users found matching the custom filters');
-      }
-    } catch (err) {
-      setShowCustomModal(false);
-      setError('Failed to load custom filtered numbers: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -213,7 +174,7 @@ export default function InitiateCalls() {
           {/* User Segments */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-3">
-              Segments
+              User Segment
             </label>
             <div className="grid grid-cols-4 gap-4">
               <button
@@ -245,13 +206,31 @@ export default function InitiateCalls() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowCustomModal(true)}
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    setError(null);
+                    setResult(null);
+                    // Get users with TOP 3 most common concerns
+                    const data = await callsAPI.getPainPointUsers(gymId, null, 100);
+                    if (data && data.phone_numbers && data.phone_numbers.length > 0) {
+                      const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
+                      setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
+                    } else {
+                      setError('No users found with top concerns');
+                    }
+                  } catch (err) {
+                    setError('Failed to load users with top concerns: ' + err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
                 disabled={loading}
-                className="py-2 px-3 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                title="Add users with custom filters (rating/date)"
+                className="py-2 px-3 bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                title="Add users who reported the 3 most common concerns"
               >
                 <span className="text-lg">🎯</span>
-                <span className="text-xs font-medium">User</span>
+                <span className="text-xs font-medium">Top Concerns</span>
               </button>
               <button
                 type="button"
@@ -297,7 +276,7 @@ export default function InitiateCalls() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label htmlFor="phoneNumbers" className="block text-sm font-medium text-gray-300">
-                Member Phone Numbers
+              Member contact
               </label>
               {phoneNumbers && (
                 <button
@@ -332,7 +311,7 @@ export default function InitiateCalls() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-300">
-                Custom Instructions (Optional)
+                Custom Prompt (Optional)
               </label>
               <button
                 type="button"
@@ -478,148 +457,37 @@ export default function InitiateCalls() {
         </div>
       )}
 
-      {/* Info Card */}
-      <div className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-blue-400 mb-3">How It Works</h3>
-        <ul className="space-y-2 text-sm text-gray-300">
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">1.</span>
-            <span>AI agent calls your gym members using Bland AI</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">2.</span>
-            <span>Conducts friendly conversation gathering feedback about their gym experience</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">3.</span>
-            <span>Call is recorded and automatically transcribed</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">4.</span>
-            <span>AI extracts insights: member satisfaction, concerns, and upsell opportunities</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-blue-400 mt-1">5.</span>
-            <span>View results in Dashboard and Calls pages to improve your gym</span>
-          </li>
-        </ul>
-      </div>
-
-       {/* Custom Filter Modal */}
-       {showCustomModal && (
-         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-           <div className="bg-gray-800 border border-gray-700 rounded-xl max-w-lg w-full p-6">
-             <div className="flex items-center justify-between mb-6">
-               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                 <span>🎯</span>
-                 Filters
-               </h2>
-               <button
-                 onClick={() => {
-                   setShowCustomModal(false);
-                   setCustomModalError(null);
-                 }}
-                 className="text-gray-400 hover:text-white transition-colors"
-               >
-                 <span className="text-2xl">×</span>
-               </button>
-             </div>
-
-             <div className="space-y-6">
-              {/* Rating Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Gym Rating Filter (1-10)
-                </label>
-                <div className="flex gap-3">
-                  <select
-                    value={customFilters.ratingOperator}
-                    onChange={(e) => setCustomFilters({ ...customFilters, ratingOperator: e.target.value })}
-                    className="pl-3 pr-10 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none cursor-pointer [&>option]:bg-gray-900 [&>option]:text-white [&>option]:py-2 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTEgMSIgc3Ryb2tlPSIjOUM5Qzk5IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[center_right_0.75rem] bg-no-repeat"
-                  >
-                    <option value="" className="bg-gray-900 text-gray-400">Select</option>
-                    <option value="gt" className="bg-gray-900 text-white">Greater than (&gt;)</option>
-                    <option value="eq" className="bg-gray-900 text-white">Equal to (=)</option>
-                    <option value="lt" className="bg-gray-900 text-white">Less than (&lt;)</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    step="0.1"
-                    value={customFilters.ratingValue}
-                    onChange={(e) => setCustomFilters({ ...customFilters, ratingValue: e.target.value })}
-                    placeholder="e.g., 7.0"
-                    className="flex-1 px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Date Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Call Date Filter
-                </label>
-                <div className="flex gap-3">
-                  <select
-                    value={customFilters.dateOperator}
-                    onChange={(e) => setCustomFilters({ ...customFilters, dateOperator: e.target.value })}
-                    className="pl-3 pr-10 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none cursor-pointer [&>option]:bg-gray-900 [&>option]:text-white [&>option]:py-2 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTEgMSIgc3Ryb2tlPSIjOUM5Qzk5IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[center_right_0.75rem] bg-no-repeat"
-                  >
-                    <option value="" className="bg-gray-900 text-gray-400">Select</option>
-                    <option value="gt" className="bg-gray-900 text-white">After (&gt;)</option>
-                    <option value="eq" className="bg-gray-900 text-white">On (=)</option>
-                    <option value="lt" className="bg-gray-900 text-white">Before (&lt;)</option>
-                  </select>
-                  <input
-                    type="date"
-                    value={customFilters.dateValue}
-                    onChange={(e) => setCustomFilters({ ...customFilters, dateValue: e.target.value })}
-                    className="flex-1 px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-               {/* Info */}
-               <p className="text-xs text-gray-400 bg-gray-900/30 rounded-lg p-3">
-                 ℹ️ Set at least one filter (rating or date) to find matching users
-               </p>
-
-               {/* Error Message */}
-               {customModalError && (
-                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                   <p className="text-red-400 text-sm">{customModalError}</p>
-                 </div>
-               )}
-
-               {/* Action Buttons */}
-               <div className="flex gap-3 pt-2">
-                 <button
-                   onClick={() => {
-                     setCustomFilters({
-                       ratingOperator: '',
-                       ratingValue: '',
-                       dateOperator: '',
-                       dateValue: ''
-                     });
-                     setCustomModalError(null);
-                   }}
-                   className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                 >
-                   Clear
-                 </button>
-                <button
-                  onClick={handleApplyCustomFilters}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Loading...' : 'Apply Filters'}
-                </button>
-              </div>
-            </div>
+      {/* Collapsible Info Card */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowInfo(!showInfo)}
+          className="w-full flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors"
+        >
+          <span className="text-sm font-semibold text-blue-400">💡 How It Works</span>
+          <span className={`text-blue-400 text-lg transition-transform duration-200 ${showInfo ? 'rotate-180' : ''}`}>
+            ▼
+          </span>
+        </button>
+        
+        {showInfo && (
+          <div className="mt-2 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <ul className="space-y-1 text-xs text-gray-400">
+              <li className="flex items-start gap-2">
+                <span className="text-blue-400">1.</span>
+                <span>AI calls members → Gathers feedback → Records & transcribes</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-400">2.</span>
+                <span>Extracts insights: satisfaction, concerns, opportunities</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-400">3.</span>
+                <span>View results in Dashboard to improve your gym</span>
+              </li>
+            </ul>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
        {/* Prompt Modal */}
        {showPromptModal && (
@@ -650,7 +518,7 @@ export default function InitiateCalls() {
                 <textarea
                   value={userPrompt}
                   onChange={(e) => setUserPrompt(e.target.value)}
-                  placeholder="e.g., Find users who mentioned equipment issues in the last month&#10;&#10;or&#10;&#10;Users who gave a rating below 5 and complained about staff"
+                  placeholder="e.g., Find users who mentioned equipment issues&#10;&#10;or&#10;&#10;Users who have complained about staff"
                   rows={5}
                   className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 />
@@ -658,7 +526,7 @@ export default function InitiateCalls() {
 
                {/* Info */}
                <p className="text-xs text-gray-400 bg-gray-900/30 rounded-lg p-3">
-                 ℹ️ Use natural language to describe the users you're looking for. The AI will search through call transcripts and insights to find matching users.
+                 ℹ️ AI will search through call recordings to find matching users.
                </p>
 
                {/* Error Message */}

@@ -605,33 +605,77 @@ class CallService:
             for row in results
         ]
     
-    def get_custom_filtered_phone_numbers(
+    def get_pain_point_phone_numbers(
         self,
+        pain_point: Optional[str] = None,
         gym_id: Optional[str] = None,
-        rating_operator: Optional[str] = None,
-        rating_value: Optional[float] = None,
-        date_operator: Optional[str] = None,
-        date_value: Optional[str] = None,
-        limit: int = 100
+        limit: int = 100,
+        top_n: int = 3
     ) -> List[dict]:
         """
-        Get phone numbers filtered by custom criteria (rating and/or date)
-        Returns latest call per phone number that matches the criteria
+        Get phone numbers from calls with top N most common pain points (latest call per phone number)
+        Returns phone numbers ordered by created_at descending
         
         Args:
+            pain_point: Specific pain point name to filter by (case-insensitive). If None, uses top N most common pain points.
             gym_id: Filter by gym ID
-            rating_operator: Comparison operator for gym_rating ('gt', 'eq', 'lt')
-            rating_value: Rating value to compare (1-10)
-            date_operator: Comparison operator for created_at ('gt', 'eq', 'lt')
-            date_value: Date value to compare (ISO format string YYYY-MM-DD)
-            limit: Maximum number of results
+            limit: Maximum number of phone numbers to return
+            top_n: Number of top pain points to consider (default 3). Only used if pain_point is None.
         
         Returns:
-            List of dicts with phone_number, call_id, gym_rating, created_at
+            List of dicts with phone_number, call_id, pain_points, created_at
         """
         from app.models.models import Insight
-        from sqlalchemy import desc, func, and_, cast, Date
-        from datetime import datetime
+        from sqlalchemy import desc, func, or_
+        from sqlalchemy.dialects.postgresql import ARRAY
+        from sqlalchemy import cast, String
+        
+        # If no specific pain point provided, get top N most common pain points using SQL aggregation
+        if not pain_point:
+            # Use PostgreSQL's unnest to expand the pain_points array and count occurrences
+            # This is much more efficient than loading all insights into memory
+            from sqlalchemy import text
+            
+            # Build the query with optional gym_id filter
+            if gym_id:
+                top_pain_points_query = text("""
+                    SELECT 
+                        LOWER(TRIM(unnested_pain_point)) as pain_point,
+                        COUNT(*) as count
+                    FROM insights i
+                    JOIN calls c ON i.call_id = c.call_id
+                    CROSS JOIN LATERAL unnest(i.pain_points) as unnested_pain_point
+                    WHERE i.confidence >= 0.3
+                        AND i.pain_points IS NOT NULL
+                        AND c.gym_id = :gym_id
+                    GROUP BY LOWER(TRIM(unnested_pain_point))
+                    ORDER BY count DESC
+                    LIMIT :top_n
+                """)
+                result = self.db.execute(top_pain_points_query, {"gym_id": gym_id, "top_n": top_n})
+            else:
+                top_pain_points_query = text("""
+                    SELECT 
+                        LOWER(TRIM(unnested_pain_point)) as pain_point,
+                        COUNT(*) as count
+                    FROM insights i
+                    CROSS JOIN LATERAL unnest(i.pain_points) as unnested_pain_point
+                    WHERE i.confidence >= 0.3
+                        AND i.pain_points IS NOT NULL
+                    GROUP BY LOWER(TRIM(unnested_pain_point))
+                    ORDER BY count DESC
+                    LIMIT :top_n
+                """)
+                result = self.db.execute(top_pain_points_query, {"top_n": top_n})
+            
+            # Extract pain points from the result
+            top_pain_points = [row[0] for row in result]
+            
+            if not top_pain_points:
+                return []  # No pain points found
+        else:
+            # Use the specific pain point provided
+            top_pain_points = [pain_point.lower()]
         
         # Subquery to get latest call per phone number
         latest_calls_subquery = (
@@ -643,12 +687,12 @@ class CallService:
             .subquery()
         )
         
-        # Main query: Join calls with insights, get latest per phone
+        # Main query: Join calls with insights, filter by top pain points, get latest per phone
         query = (
             self.db.query(
                 Call.phone_number,
                 Call.call_id,
-                Insight.gym_rating,
+                Insight.pain_points,
                 Call.created_at
             )
             .join(Insight, Call.call_id == Insight.call_id)
@@ -657,38 +701,24 @@ class CallService:
                 (Call.phone_number == latest_calls_subquery.c.phone_number) &
                 (Call.created_at == latest_calls_subquery.c.latest_created_at)
             )
+            .filter(Insight.pain_points.isnot(None))
+            .filter(Insight.confidence >= 0.3)  # Only high-confidence insights
         )
         
-        # Apply gym_id filter
+        # Filter by top pain points (case-insensitive)
+        # Check if any of the pain points in the array match any of the top pain points
+        pain_point_filters = []
+        for pp in top_pain_points:
+            pain_point_filters.append(
+                func.lower(func.array_to_string(Insight.pain_points, '||')).contains(pp)
+            )
+        
+        if pain_point_filters:
+            query = query.filter(or_(*pain_point_filters))
+        
         if gym_id:
             query = query.filter(Call.gym_id == gym_id)
         
-        # Apply rating filter
-        if rating_operator and rating_value is not None:
-            if rating_operator == 'gt':
-                query = query.filter(Insight.gym_rating > rating_value)
-            elif rating_operator == 'eq':
-                query = query.filter(Insight.gym_rating == rating_value)
-            elif rating_operator == 'lt':
-                query = query.filter(Insight.gym_rating < rating_value)
-        
-        # Apply date filter
-        if date_operator and date_value:
-            try:
-                # Parse the date value
-                target_date = datetime.strptime(date_value, '%Y-%m-%d').date()
-                
-                if date_operator == 'gt':
-                    query = query.filter(cast(Call.created_at, Date) > target_date)
-                elif date_operator == 'eq':
-                    query = query.filter(cast(Call.created_at, Date) == target_date)
-                elif date_operator == 'lt':
-                    query = query.filter(cast(Call.created_at, Date) < target_date)
-            except ValueError:
-                # If date parsing fails, skip the date filter
-                pass
-        
-        # Order by created_at descending and limit
         query = query.order_by(desc(Call.created_at)).limit(limit)
         
         results = query.all()
@@ -697,7 +727,7 @@ class CallService:
             {
                 "phone_number": row.phone_number,
                 "call_id": row.call_id,
-                "gym_rating": float(row.gym_rating) if row.gym_rating else None,
+                "pain_points": row.pain_points if row.pain_points else [],
                 "created_at": row.created_at.isoformat() if row.created_at else None
             }
             for row in results

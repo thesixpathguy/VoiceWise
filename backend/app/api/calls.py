@@ -493,59 +493,38 @@ async def get_top_revenue_users(
         raise HTTPException(status_code=500, detail=f"Failed to get revenue user segments: {str(e)}")
 
 
-@router.get("/user-segments/custom")
-async def get_custom_filtered_users(
+@router.get("/user-segments/pain-points")
+async def get_pain_point_users(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
-    rating_operator: Optional[str] = Query(None, description="Rating filter operator: gt, eq, lt"),
-    rating_value: Optional[float] = Query(None, ge=1.0, le=10.0, description="Rating value to compare (1-10)"),
-    date_operator: Optional[str] = Query(None, description="Date filter operator: gt, eq, lt"),
-    date_value: Optional[str] = Query(None, description="Date value to compare (ISO format: YYYY-MM-DD)"),
+    pain_point: Optional[str] = Query(None, description="Specific pain point to filter by (case-insensitive). If not provided, returns users with TOP 3 most common pain points."),
     limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
     db: Session = Depends(get_db)
 ):
     """
-    Get users based on custom filters (rating and/or date)
-    Returns latest call per phone number that matches the criteria
+    Get users with pain points (latest call per phone number)
+    Returns phone numbers ordered by created_at descending
     
     - **gym_id**: Optional gym filter
-    - **rating_operator**: Comparison operator for rating (gt, eq, lt)
-    - **rating_value**: Rating value (1-10) from gym_rating field
-    - **date_operator**: Comparison operator for date (gt, eq, lt)
-    - **date_value**: Date in ISO format (YYYY-MM-DD)
+    - **pain_point**: Optional specific pain point to filter (e.g., "equipment issues", "cleanliness"). If omitted, returns users with TOP 3 most common pain points.
     - **limit**: Max results (default 100)
+    
+    Note: By default, only returns users with the TOP 3 most frequently occurring pain points to focus on critical issues.
     """
     call_service = CallService(db)
-    
-    # Validate operators
-    valid_operators = ['gt', 'eq', 'lt']
-    if rating_operator and rating_operator not in valid_operators:
-        raise HTTPException(status_code=400, detail=f"Invalid rating_operator. Must be one of: {valid_operators}")
-    if date_operator and date_operator not in valid_operators:
-        raise HTTPException(status_code=400, detail=f"Invalid date_operator. Must be one of: {valid_operators}")
-    
-    # Validate that at least one filter is provided
-    if not ((rating_operator and rating_value is not None) or (date_operator and date_value)):
-        raise HTTPException(status_code=400, detail="At least one filter (rating or date) must be provided")
-    
     try:
-        results = call_service.get_custom_filtered_phone_numbers(
+        results = call_service.get_pain_point_phone_numbers(
+            pain_point=pain_point,
             gym_id=gym_id,
-            rating_operator=rating_operator,
-            rating_value=rating_value,
-            date_operator=date_operator,
-            date_value=date_value,
-            limit=limit
+            limit=limit,
+            top_n=3  # Get users with TOP 3 most common pain points
         )
         return {
-            "filters": {
-                "rating": f"{rating_operator} {rating_value}" if rating_operator and rating_value is not None else None,
-                "date": f"{date_operator} {date_value}" if date_operator and date_value else None
-            },
+            "pain_point": pain_point,
             "total_count": len(results),
             "phone_numbers": results
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get custom filtered users: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get pain point user segments: {str(e)}")
 
 
 @router.get("/user-segments/prompt")
