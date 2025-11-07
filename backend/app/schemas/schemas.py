@@ -18,6 +18,7 @@ class CallResponse(BaseModel):
     phone_number: str
     call_id: str
     status: str
+    api_key_index: int  # Which API key was used (0 or 1)
 
 
 # API -> Client
@@ -38,6 +39,7 @@ class CallDetail(BaseModel):
     raw_transcript: Optional[str] = None
     custom_instructions: Optional[List[str]] = None  # Custom instructions for this call
     answered_by: Optional[str] = None  # Who answered the call: human, voicemail, unknown, no-answer
+    api_key_index: int  # Which API key was used (0 or 1)
     
     class Config:
         from_attributes = True
@@ -93,6 +95,7 @@ class LiveCall(BaseModel):
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="AI confidence score 0.0-1.0 (None for first analysis)")
     call_initiated_timestamp: str = Field(..., description="Timestamp of when the call was initiated.")
     phone_number: str = Field(..., description="Phone number that was called")
+    api_key_index: int = Field(..., description="Which API key was used for this call (0 or 1)")
 
 # Webhook Schemas
 

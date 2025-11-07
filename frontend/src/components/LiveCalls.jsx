@@ -39,6 +39,7 @@ export default function LiveCalls() {
     return {
       id: callId,
       blandCallId: apiCall.call_id, // Preserve the actual Bland AI call ID
+      apiKeyIndex: apiCall.api_key_index !== undefined ? apiCall.api_key_index : 0, // NEW: Track which API key was used (0 or 1)
       phoneNumber: apiCall.phone_number,
       startTime: startTime,
       duration: duration,
@@ -125,16 +126,18 @@ export default function LiveCalls() {
       setAudioStatus('connecting');
       setIsPlayingAudio(true);
 
-      const blandApiKey = import.meta.env.VITE_BLAND_AI_API_KEY || 
-                         localStorage.getItem('bland_api_key');
-
-      if (!blandApiKey) {
-        throw new Error('Bland AI API key not configured');
-      }
-
       const activeCall = liveCalls.find(c => c.id === activeTab);
       if (!activeCall) {
         throw new Error('No active call selected');
+      }
+
+      // Get API keys from env and select by index
+      const apiKeysStr = import.meta.env.VITE_BLAND_AI_API_KEYS;
+      const apiKeys = apiKeysStr.split(',').map(key => key.trim());
+      const blandApiKey = apiKeys[activeCall.apiKeyIndex] || apiKeys[0];
+
+      if (!blandApiKey) {
+        throw new Error('Bland AI API key not configured');
       }
 
       // Use the actual Bland AI call_id
@@ -143,7 +146,7 @@ export default function LiveCalls() {
         throw new Error('Call ID not available from Bland AI');
       }
 
-      console.log('[Audio] Requesting WebSocket URL for call:', blandCallId);
+      console.log(`[Audio] Using API key index ${activeCall.apiKeyIndex} for call:`, blandCallId);
 
       const listenResponse = await callsAPI.getLiveCallAudio(blandCallId, blandApiKey);
       const wsUrl = listenResponse?.data?.url;

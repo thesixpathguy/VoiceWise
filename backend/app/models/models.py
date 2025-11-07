@@ -31,6 +31,7 @@ class Call(Base):
 
     # Stored as a string in the DB (native_enum=False) to avoid DB-level enum migrations.
     answered_by = Column(SAEnum(AnsweredByEnum, name="answered_by_enum", native_enum=False), nullable=True, index=True)
+    api_key_index = Column(Integer, nullable=False, default=0)  # Which API key was used (0 or 1) for round-robin
     
     # Relationship to insights
     insights = relationship("Insight", back_populates="call", cascade="all, delete-orphan")
