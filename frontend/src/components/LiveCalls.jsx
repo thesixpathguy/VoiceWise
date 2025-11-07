@@ -83,6 +83,15 @@ export default function LiveCalls() {
       
       console.log(`📞 Got ${apiCalls.length} live calls from API`);
       
+      // Debug: Log all call IDs from API
+      console.log('📋 API call IDs:', apiCalls.map(c => ({
+        id: c.call_id,
+        phone: c.phone_number,
+        status: c.status,
+        timestamp: c.call_initiated_timestamp,
+        duration: Math.round((new Date() - new Date(c.call_initiated_timestamp)) / 1000) + 's'
+      })));
+      
       // Transform API calls to component format
       const transformedCalls = apiCalls.map(transformLiveCall);
       

@@ -456,7 +456,9 @@ class CacheService:
         CacheService._live_call_cache.clear()
     
     # Live call cache (separate from other caches for faster access)
-    _live_call_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL for live calls
+    # TTL of 10 minutes: calls auto-expire if webhook doesn't invalidate them
+    # This ensures stuck calls don't persist indefinitely
+    _live_call_cache: TTLCache = TTLCache(maxsize=1000, ttl=600)  # 10 min TTL for live calls
     
     @staticmethod
     def get_live_call(call_id: str) -> Optional[LiveCall]:
@@ -481,6 +483,7 @@ class CacheService:
             live_call: LiveCall Pydantic model
         """
         CacheService._live_call_cache[f"live_call_{call_id}"] = live_call
+        print(f"⏱️ Live call cached: {call_id} (will expire in 10 min)")  # TTL logging
     
     @staticmethod
     def get_all_live_calls() -> List[LiveCall]:
