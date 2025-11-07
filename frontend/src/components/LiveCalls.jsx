@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { callsAPI } from '../api/api';
+import audioService from '../services/audioService';
 
 export default function LiveCalls() {
   const [liveCalls, setLiveCalls] = useState([]);
   const [activeTab, setActiveTab] = useState(null);
   const [conversations, setConversations] = useState({});
   const [loading, setLoading] = useState(true);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [audioStatus, setAudioStatus] = useState('idle');
+  const [audioError, setAudioError] = useState(null);
   const messagesEndRefs = useRef({});
 
   // Transform API response to component format
@@ -34,6 +38,7 @@ export default function LiveCalls() {
     
     return {
       id: callId,
+      blandCallId: apiCall.call_id, // Preserve the actual Bland AI call ID
       phoneNumber: apiCall.phone_number,
       startTime: startTime,
       duration: duration,
@@ -111,6 +116,66 @@ export default function LiveCalls() {
 
   const handleTabClick = (callId) => {
     setActiveTab(callId);
+    stopAudio(); // Stop audio when switching calls
+  };
+
+  const handlePlayAudio = async () => {
+    try {
+      setAudioError(null);
+      setAudioStatus('connecting');
+      setIsPlayingAudio(true);
+
+      const blandApiKey = import.meta.env.VITE_BLAND_AI_API_KEY || 
+                         localStorage.getItem('bland_api_key');
+
+      if (!blandApiKey) {
+        throw new Error('Bland AI API key not configured');
+      }
+
+      const activeCall = liveCalls.find(c => c.id === activeTab);
+      if (!activeCall) {
+        throw new Error('No active call selected');
+      }
+
+      // Use the actual Bland AI call_id
+      const blandCallId = activeCall.blandCallId;
+      if (!blandCallId) {
+        throw new Error('Call ID not available from Bland AI');
+      }
+
+      console.log('[Audio] Requesting WebSocket URL for call:', blandCallId);
+
+      const listenResponse = await callsAPI.getLiveCallAudio(blandCallId, blandApiKey);
+      const wsUrl = listenResponse?.data?.url;
+
+      if (!wsUrl) {
+        throw new Error('No WebSocket URL received from Bland AI');
+      }
+
+      console.log('[Audio] Got WebSocket URL, starting playback');
+
+      await audioService.startAudioPlayback(
+        wsUrl,
+        (status) => setAudioStatus(status),
+        (error) => {
+          setAudioError(error);
+          setIsPlayingAudio(false);
+          setAudioStatus('error');
+        }
+      );
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      setAudioError(error.message);
+      setAudioStatus('error');
+      setIsPlayingAudio(false);
+    }
+  };
+
+  const stopAudio = () => {
+    audioService.stopAudioPlayback();
+    setIsPlayingAudio(false);
+    setAudioStatus('idle');
+    setAudioError(null);
   };
 
   // Auto-scroll to bottom when conversation updates
@@ -252,6 +317,62 @@ export default function LiveCalls() {
             return (
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl overflow-hidden flex flex-col h-full">
+                  {/* Audio Player Section - Prominent */}
+                  <div className="border-b border-gray-700 p-4 bg-gradient-to-r from-primary-500/10 to-primary-500/5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">🔊</span>
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">Listen to Call</h4>
+                          <p className="text-xs text-gray-400 mt-0.5">Stream live audio from Bland AI</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!isPlayingAudio ? (
+                          <button
+                            onClick={handlePlayAudio}
+                            className="flex items-center gap-2 px-4 py-2 bg-primary-500/30 border border-primary-500/50 rounded-lg hover:bg-primary-500/40 transition-colors text-primary-300 font-medium"
+                            title="Play live audio"
+                          >
+                            <span>▶️</span>
+                            <span>Play Audio</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={stopAudio}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-500/30 border border-red-500/50 rounded-lg hover:bg-red-500/40 transition-colors text-red-300 font-medium"
+                            title="Stop audio"
+                          >
+                            <span>⏹️</span>
+                            <span>Stop</span>
+                          </button>
+                        )}
+                        
+                        {/* Status Indicator */}
+                        {isPlayingAudio && (
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                            <div className="flex gap-0.5">
+                              <div className="w-1 h-2 bg-primary-500 rounded-full animate-pulse"></div>
+                              <div className="w-1 h-3 bg-primary-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                              <div className="w-1 h-2 bg-primary-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                            </div>
+                            <span>
+                              {audioStatus === 'connecting' ? 'Connecting...' : audioStatus === 'playing' ? 'Playing' : audioStatus}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Error Display */}
+                        {audioError && (
+                          <div className="flex items-center gap-1 text-xs text-red-400">
+                            <span>⚠️</span>
+                            <span>{audioError}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* AI Analytics Section - Top */}
                   <div className="border-b border-gray-700 p-4 bg-gray-800/30">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

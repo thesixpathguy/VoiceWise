@@ -730,6 +730,7 @@ class CallService:
                 )
                 
                 live_call = LiveCall(
+                    call_id=payload.call_id,
                     conversation=[new_conversation_turn],
                     sentiment=None,
                     call_initiated_timestamp=call_timestamp,

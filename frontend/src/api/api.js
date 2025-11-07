@@ -180,6 +180,34 @@ export const callsAPI = {
     const response = await api.get('/api/calls/live');
     return response.data;
   },
+
+  // Get live call audio WebSocket URL (POC - direct Bland.ai call, later will use backend proxy)
+  getLiveCallAudio: async (callId, blandApiKey) => {
+    // POC: Call Bland AI directly from frontend
+    // NOTE: For production, this should be proxied through backend to keep API key secure
+    const blandUrl = `https://api.bland.ai/v1/calls/${encodeURIComponent(callId)}/listen`;
+    
+    try {
+      const response = await fetch(blandUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(blandApiKey ? { Authorization: `Bearer ${blandApiKey}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Bland AI API returned ${response.status}: ${errorText}`);
+      }
+
+      const json = await response.json();
+      return json;
+    } catch (error) {
+      console.error('Error getting live call audio:', error);
+      throw error;
+    }
+  },
 };
 
 // Health check

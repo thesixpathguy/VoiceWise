@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import audioService from '../services/audioService';
+import { callsAPI } from '../api/api';
 
 export default function LiveCallModal({ call, isOpen, onClose }) {
   const [conversation, setConversation] = useState(call?.conversation || []);
+  const [audioStatus, setAudioStatus] = useState('idle'); // idle, connecting, playing, stopped, error
+  const [audioError, setAudioError] = useState(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -31,6 +36,65 @@ export default function LiveCallModal({ call, isOpen, onClose }) {
 
     return () => clearInterval(interval);
   }, [isOpen, conversation.length, call]);
+
+  // Cleanup audio on modal close
+  useEffect(() => {
+    if (!isOpen) {
+      stopAudio();
+    }
+  }, [isOpen]);
+
+  const handlePlayAudio = async () => {
+    try {
+      setAudioError(null);
+      setAudioStatus('connecting');
+      setIsPlayingAudio(true);
+
+      // Get Bland AI API key from environment or local storage
+      // For POC: You'll need to set this in your .env file as VITE_BLAND_AI_API_KEY
+      const blandApiKey = import.meta.env.VITE_BLAND_AI_API_KEY || 
+                         localStorage.getItem('bland_api_key');
+
+      if (!blandApiKey) {
+        throw new Error('Bland AI API key not configured. Please set VITE_BLAND_AI_API_KEY in .env');
+      }
+
+      if (!call.call_id) {
+        throw new Error('Call ID not available');
+      }
+
+      // Get the WebSocket URL from Bland AI
+      const listenResponse = await callsAPI.getLiveCallAudio(call.call_id, blandApiKey);
+      const wsUrl = listenResponse?.data?.url;
+
+      if (!wsUrl) {
+        throw new Error('No WebSocket URL received from Bland AI');
+      }
+
+      // Start audio playback
+      await audioService.startAudioPlayback(
+        wsUrl,
+        (status) => setAudioStatus(status),
+        (error) => {
+          setAudioError(error);
+          setIsPlayingAudio(false);
+          setAudioStatus('error');
+        }
+      );
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      setAudioError(error.message);
+      setAudioStatus('error');
+      setIsPlayingAudio(false);
+    }
+  };
+
+  const stopAudio = () => {
+    audioService.stopAudioPlayback();
+    setIsPlayingAudio(false);
+    setAudioStatus('idle');
+    setAudioError(null);
+  };
 
   if (!isOpen || !call) return null;
 
@@ -89,12 +153,57 @@ export default function LiveCallModal({ call, isOpen, onClose }) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors text-2xl w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-800"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Audio Player Button - Enhanced */}
+              {!isPlayingAudio ? (
+                <button
+                  onClick={handlePlayAudio}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-500/40 border-2 border-primary-500/70 rounded-lg hover:bg-primary-500/50 transition-all text-primary-200 text-sm font-semibold shadow-lg shadow-primary-500/20"
+                  title="Play live audio from Bland AI"
+                >
+                  <span className="text-xl">🔊</span>
+                  <span>Play Audio</span>
+                </button>
+              ) : (
+                <button
+                  onClick={stopAudio}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500/40 border-2 border-red-500/70 rounded-lg hover:bg-red-500/50 transition-all text-red-200 text-sm font-semibold shadow-lg shadow-red-500/20"
+                  title="Stop audio"
+                >
+                  <span className="text-xl">⏹️</span>
+                  <span>Stop</span>
+                </button>
+              )}
+              
+              {/* Status Indicator */}
+              {isPlayingAudio && (
+                <div className="flex items-center gap-1 text-xs text-gray-300">
+                  <div className="flex gap-0.5">
+                    <div className="w-1 h-2 bg-primary-400 rounded-full animate-pulse"></div>
+                    <div className="w-1 h-3 bg-primary-400 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-1 h-2 bg-primary-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                  <span className="ml-1">
+                    {audioStatus === 'connecting' ? 'Connecting...' : 'Playing'}
+                  </span>
+                </div>
+              )}
+
+              {/* Error Display */}
+              {audioError && (
+                <div className="flex items-center gap-1 text-xs text-red-300 bg-red-500/10 px-3 py-1 rounded-lg">
+                  <span>⚠️</span>
+                  <span>{audioError}</span>
+                </div>
+              )}
+              
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-white transition-colors text-2xl w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-800"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {/* Quick Stats Bar */}

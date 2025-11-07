@@ -85,6 +85,7 @@ class ConversationTurn(BaseModel):
 # Live Call Model
 class LiveCall(BaseModel):
     """Live call data structure"""
+    call_id: str = Field(..., description="Unique call identifier from Bland AI")
     conversation: List[ConversationTurn] = Field(default_factory=list, description="List of conversation turns")
     sentiment: Optional[str] = Field(None, description="Overall sentiment of the call (None for first analysis)")
     churn_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Churn risk score 0.0-1.0 (None for first analysis)")
