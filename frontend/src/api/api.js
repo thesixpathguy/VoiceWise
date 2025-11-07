@@ -142,6 +142,26 @@ export const callsAPI = {
     return response.data;
   },
   
+  // Get pain point user segments
+  getPainPointUsers: async (gymId = null, painPoint = null, limit = 100) => {
+    const params = {};
+    if (gymId) params.gym_id = gymId;
+    if (painPoint) params.pain_point = painPoint;
+    params.limit = limit;
+    const response = await api.get('/api/calls/user-segments/pain-points', { params });
+    return response.data;
+  },
+  
+  // Get prompt filtered user segments (AI search)
+  getPromptFilteredUsers: async (gymId = null, prompt = '', limit = 100) => {
+    const params = {};
+    if (gymId) params.gym_id = gymId;
+    params.prompt = prompt;
+    params.limit = limit;
+    const response = await api.get('/api/calls/user-segments/prompt', { params });
+    return response.data;
+  },
+  
   // Get latest call by phone number
   getLatestCallByPhone: async (phoneNumber, gymId = null, startDate = null, endDate = null) => {
     const params = {};

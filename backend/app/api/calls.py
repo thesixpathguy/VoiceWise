@@ -63,6 +63,7 @@ async def list_calls(
     end_date: Optional[str] = Query(None, description="Filter by end date (DD-MM-YYYY format)"),
     order_by: Optional[str] = Query(None, description="Order results: 'churn_score_desc', 'revenue_score_desc', 'created_at_desc' (default)"),
     limit: int = Query(50, ge=1, le=200, description="Number of calls to return"),
+    fields: Optional[str] = Query(None, description="Comma-separated list of fields to return (e.g., 'call_id,phone_number,status'). If not provided, returns all fields."),
     skip: int = Query(0, ge=0, description="Number of calls to skip"),
     db: Session = Depends(get_db)
 ):
@@ -79,6 +80,7 @@ async def list_calls(
     - **revenue_min_score**: Filter by minimum revenue interest score (for drill-down from revenue section)
     - **order_by**: Order results by score or date (for drill-down to show highest scores first)
     - **limit**: Max number of results (1-200)
+    - **fields**: Comma-separated list of fields to return (field projection). Example: `call_id,phone_number,status,created_at`
     - **skip**: Pagination offset
     
     Returns paginated response with total count
@@ -92,6 +94,11 @@ async def list_calls(
         """Internal function to fetch calls from database"""
         calls, total_count = call_service.get_calls(**kwargs)
         return calls, total_count
+    
+    # Parse field projection parameter
+    field_list = None
+    if fields:
+        field_list = [f.strip() for f in fields.split(',') if f.strip()]
     
     # Use cache for chart queries (date filters + reasonable limit)
     # Skip cache for pagination queries (skip > 0) or queries without date filters
@@ -118,6 +125,7 @@ async def list_calls(
             churn_min_score=churn_min_score,
             revenue_min_score=revenue_min_score,
             order_by=order_by,
+            fields=field_list,
             limit=limit
         )
         
@@ -136,6 +144,7 @@ async def list_calls(
                 churn_min_score=churn_min_score,
                 revenue_min_score=revenue_min_score,
                 order_by=order_by,
+                fields=field_list,
                 limit=limit,
                 skip=0
             )
@@ -154,6 +163,7 @@ async def list_calls(
                 start_date=start_date,
                 end_date=end_date,
                 order_by=order_by,
+                fields=field_list,
                 limit=limit,
                 skip=skip
             )
@@ -499,6 +509,139 @@ async def get_top_revenue_users(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get revenue user segments: {str(e)}")
+
+
+@router.get("/user-segments/pain-points")
+async def get_pain_point_users(
+    gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    pain_point: Optional[str] = Query(None, description="Specific pain point to filter by (case-insensitive). If not provided, returns users with TOP 3 most common pain points."),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get users with pain points (latest call per phone number)
+    Returns phone numbers ordered by created_at descending
+    
+    - **gym_id**: Optional gym filter
+    - **pain_point**: Optional specific pain point to filter (e.g., "equipment issues", "cleanliness"). If omitted, returns users with TOP 3 most common pain points.
+    - **limit**: Max results (default 100)
+    
+    Note: By default, only returns users with the TOP 3 most frequently occurring pain points to focus on critical issues.
+    """
+    call_service = CallService(db)
+    try:
+        results = call_service.get_pain_point_phone_numbers(
+            pain_point=pain_point,
+            gym_id=gym_id,
+            limit=limit,
+            top_n=3  # Get users with TOP 3 most common pain points
+        )
+        return {
+            "pain_point": pain_point,
+            "total_count": len(results),
+            "phone_numbers": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get pain point user segments: {str(e)}")
+
+
+@router.get("/user-segments/prompt")
+async def get_prompt_filtered_users(
+    gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    prompt: str = Query(..., description="Natural language prompt to find users"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get users based on AI prompt search
+    Uses semantic search through call transcripts and insights to find matching users
+    
+    - **gym_id**: Optional gym filter
+    - **prompt**: Natural language description of users to find
+    - **limit**: Max results (default 100)
+    
+    Examples:
+    - "Find users who mentioned equipment issues"
+    - "Users with rating below 5 who complained about staff"
+    - "Members interested in personal training"
+    """
+    from app.services.search_service import SearchService
+    
+    search_service = SearchService(db)
+    
+    try:
+        # Use semantic search to find matching calls
+        search_results = search_service.search_calls(
+            query=prompt,
+            search_type="nlp",
+            gym_id=gym_id,
+            limit=limit * 2,  # Get more results to account for filtering
+            similarity_threshold=0.7
+        )
+        
+        # Extract unique phone numbers from search results
+        # Get latest call per phone number
+        from app.models.models import Call
+        from sqlalchemy import func, desc
+        
+        # Get unique phone numbers from search results (search_results is a dict with "calls" key)
+        calls_list = search_results.get("calls", [])
+        call_ids = [call["call_id"] for call in calls_list]
+        
+        if not call_ids:
+            return {
+                "prompt": prompt,
+                "total_count": 0,
+                "phone_numbers": []
+            }
+        
+        # Subquery to get latest call per phone number
+        latest_calls_subquery = (
+            db.query(
+                Call.phone_number,
+                func.max(Call.created_at).label('latest_created_at')
+            )
+            .filter(Call.call_id.in_(call_ids))
+            .group_by(Call.phone_number)
+            .subquery()
+        )
+        
+        # Get the actual calls
+        query = (
+            db.query(
+                Call.phone_number,
+                Call.call_id,
+                Call.created_at
+            )
+            .join(
+                latest_calls_subquery,
+                (Call.phone_number == latest_calls_subquery.c.phone_number) &
+                (Call.created_at == latest_calls_subquery.c.latest_created_at)
+            )
+            .filter(Call.call_id.in_(call_ids))
+        )
+        
+        if gym_id:
+            query = query.filter(Call.gym_id == gym_id)
+        
+        query = query.order_by(desc(Call.created_at)).limit(limit)
+        
+        results = query.all()
+        
+        return {
+            "prompt": prompt,
+            "total_count": len(results),
+            "phone_numbers": [
+                {
+                    "phone_number": row.phone_number,
+                    "call_id": row.call_id,
+                    "created_at": row.created_at.isoformat() if row.created_at else None
+                }
+                for row in results
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process prompt search: {str(e)}")
 
 
 @router.get("/phone/{phone_number}/latest", response_model=CallDetail)

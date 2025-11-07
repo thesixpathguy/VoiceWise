@@ -12,15 +12,28 @@ export default function LiveCalls() {
   const [audioError, setAudioError] = useState(null);
   const messagesEndRefs = useRef({});
 
+  const parseTimestamp = (timestamp) => {
+    if (!timestamp) return new Date();
+
+    const trimmed = String(timestamp).trim();
+    // If timestamp already contains timezone info, use as-is
+    if (/Z$/i.test(trimmed) || /[+-]\d{2}:?\d{2}$/.test(trimmed)) {
+      return new Date(trimmed);
+    }
+
+    // Otherwise treat it as UTC by appending Z
+    return new Date(`${trimmed}Z`);
+  };
+
   // Transform API response to component format
   const transformLiveCall = (apiCall) => {
     // Generate a unique ID from phone number and timestamp
     const callId = `${apiCall.phone_number}_${apiCall.call_initiated_timestamp}`;
     
     // Calculate duration from timestamp (will be recalculated on each poll)
-    const startTime = new Date(apiCall.call_initiated_timestamp);
+    const startTime = parseTimestamp(apiCall.call_initiated_timestamp);
     const now = new Date();
-    const durationSeconds = Math.floor((now - startTime) / 1000);
+    const durationSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
     const minutes = Math.floor(durationSeconds / 60);
     const seconds = durationSeconds % 60;
     const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -219,20 +232,19 @@ export default function LiveCalls() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-              <span className="relative">
-                <span className="text-4xl">📞</span>
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-gray-900"></span>
-              </span>
-              Live Calls
-            </h1>
+        <div className="relative flex justify-center mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+          <div className="relative flex items-center gap-3 rounded-full border border-gray-700 bg-gray-900 px-5 py-2.5 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+              <span className="text-base text-gray-400 font-medium">Live Calls</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+            </div>
+            <div className="ml-3 flex items-center gap-2 px-3 py-1 bg-green-500/10 border border-green-500/30 rounded-full">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-400 font-medium text-sm">
+              <span className="text-green-400 font-medium text-xs">
                 {liveCalls.length} Active
               </span>
             </div>

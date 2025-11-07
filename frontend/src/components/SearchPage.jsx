@@ -118,7 +118,20 @@ export default function SearchPage({ setCurrentPage }) {
     <div className="max-w-7xl mx-auto px-4 py-4">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-2">Search Calls</h1>
+        <div className="relative flex justify-center mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+          </div>
+          <div className="relative flex justify-center">
+            <div className="bg-gray-900 px-5 py-2.5 rounded-full border border-gray-700 shadow-lg backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-700 animate-pulse"></div>
+                <span className="text-base text-gray-400 font-medium">Search Calls</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-700 animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search Form */}

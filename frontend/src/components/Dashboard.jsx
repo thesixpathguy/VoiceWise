@@ -214,8 +214,8 @@ export default function Dashboard({ setCurrentPage }) {
               onClick={() => setCurrentPage('calls')}
               className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 cursor-pointer hover:bg-purple-500/20 transition-all flex flex-col items-center justify-center"
             >
-              <span className="text-gray-400 text-xs mb-0.5">Call Total</span>
-              <p className="text-lg font-bold text-purple-400">{generic.total_calls || 0}</p>
+              <span className="text-gray-400 text-sm mb-0.5">Total Calls</span>
+              <p className="text-xl font-bold text-purple-400">{generic.total_calls || 0}</p>
             </div>
 
             {/* Positive Sentiment - Green, Clickable */}
@@ -223,8 +223,8 @@ export default function Dashboard({ setCurrentPage }) {
               onClick={() => openFilterModal('sentiment', 'positive', `Positive Sentiment Calls (${generic.positive_sentiment || 0})`)}
               className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 cursor-pointer hover:bg-green-500/20 transition-all flex flex-col items-center justify-center"
             >
-              <span className="text-gray-400 text-xs mb-0.5">Call Positive</span>
-              <p className="text-lg font-bold text-green-400">{generic.positive_sentiment || 0}</p>
+              <span className="text-gray-400 text-sm mb-0.5">Positive Calls</span>
+              <p className="text-xl font-bold text-green-400">{generic.positive_sentiment || 0}</p>
             </div>
 
             {/* Negative Sentiment - Red, Clickable */}
@@ -232,10 +232,29 @@ export default function Dashboard({ setCurrentPage }) {
               onClick={() => openFilterModal('sentiment', 'negative', `Negative Sentiment Calls (${generic.negative_sentiment || 0})`)}
               className="bg-red-500/10 border border-red-500/30 rounded-lg p-2 cursor-pointer hover:bg-red-500/20 transition-all flex flex-col items-center justify-center"
             >
-              <span className="text-gray-400 text-xs mb-0.5">Call Negative</span>
-              <p className="text-lg font-bold text-red-400">{generic.negative_sentiment || 0}</p>
+              <span className="text-gray-400 text-sm mb-0.5">Negative Calls</span>
+              <p className="text-xl font-bold text-red-400">{generic.negative_sentiment || 0}</p>
             </div>
 
+            {/* Additional Metrics Row */}
+            <div className="grid grid-cols-3 gap-2 col-span-3">
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
+                <span className="text-gray-400 text-sm mb-0.5">Avg Rating</span>
+                <p className="text-xl font-bold text-white">
+                  {generic.average_gym_rating !== null && generic.average_gym_rating !== undefined
+                    ? `${generic.average_gym_rating}/10`
+                    : 'N/A'}
+                </p>
+              </div>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
+                <span className="text-gray-400 text-sm mb-0.5">Placeholder Metric</span>
+                <p className="text-xl font-bold text-white">NA</p>
+              </div>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
+                <span className="text-gray-400 text-sm mb-0.5">Placeholder Metric</span>
+                <p className="text-xl font-bold text-white">NA</p>
+              </div>
+            </div>
           </div>
 
           {/* Sentiment Trend Chart - Wider and Higher */}
@@ -404,7 +423,7 @@ export default function Dashboard({ setCurrentPage }) {
               {/* Average Gym Rating for Churn Calls */}
               <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-400 text-xs">Avg Rating</span>
+                  <span className="text-gray-400 text-xs">Avg Review Rating</span>
                 </div>
                 <p className="text-xl font-bold text-white">
                   {churn.average_gym_rating !== null && churn.average_gym_rating !== undefined 
@@ -583,7 +602,7 @@ export default function Dashboard({ setCurrentPage }) {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <span>🎯</span>
-              Top Pain Points (Churn)
+              Top Improvement Levers
             </h3>
             {churn.top_pain_points && churn.top_pain_points.length > 0 ? (
               <div className="space-y-2">
@@ -592,7 +611,7 @@ export default function Dashboard({ setCurrentPage }) {
                     key={index} 
                     onClick={() => {
                       const threshold = churn.churn_threshold || 0.8;
-                      openFilterModal('pain_point_churn', `${point.name}|${threshold}`, `Pain Point: ${point.name} (${point.count} calls) - Churn Section`);
+                      openFilterModal('pain_point_churn', `${point.name}|${threshold}`, `Improvement Lever: ${point.name} (${point.count} calls)`);
                     }}
                     className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 cursor-pointer transition-all"
                   >
@@ -612,7 +631,7 @@ export default function Dashboard({ setCurrentPage }) {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <span>💬</span>
-              Top Churn Quotes
+              Member Disinterests Expressed
             </h3>
             {churn.top_churn_quotes && churn.top_churn_quotes.length > 0 ? (
               <div className="space-y-2">
@@ -652,7 +671,7 @@ export default function Dashboard({ setCurrentPage }) {
           <div className="bg-gray-900 px-5 py-2.5 rounded-full border border-gray-700 shadow-lg backdrop-blur-sm">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full bg-primary-500 animate-pulse"></div>
-              <span className="text-base text-gray-400 font-medium">Revenue Analysis</span>
+              <span className="text-base text-gray-400 font-medium">Revenue Opportunities Analysis</span>
               <div className="w-2.5 h-2.5 rounded-full bg-primary-500 animate-pulse"></div>
             </div>
           </div>
@@ -669,11 +688,11 @@ export default function Dashboard({ setCurrentPage }) {
             {/* Total Revenue Calls and Rating - Compact */}
             <div className="grid grid-cols-2 gap-3">
               <div 
-                onClick={() => openFilterModal('revenue_min_score', revenue.revenue_threshold || 0.8, `Revenue Interest Calls (${revenue.total_calls || 0})`)}
+                onClick={() => openFilterModal('revenue_min_score', revenue.revenue_threshold || 0.8, `Lead Interest Calls (${revenue.total_calls || 0})`)}
                 className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3 cursor-pointer hover:bg-primary-500/20 transition-all"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-400 text-xs">Top Revenue Calls</span>
+                  <span className="text-gray-400 text-xs">Lead Interest Calls</span>
                 </div>
                 <p className="text-xl font-bold text-primary-400">{revenue.total_calls || 0}</p>
               </div>
@@ -681,7 +700,7 @@ export default function Dashboard({ setCurrentPage }) {
               {/* Average Gym Rating for Revenue Calls */}
               <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-400 text-xs">Avg Rating</span>
+                  <span className="text-gray-400 text-xs">Avg Review Rating</span>
                 </div>
                 <p className="text-xl font-bold text-white">
                   {revenue.average_gym_rating !== null && revenue.average_gym_rating !== undefined 
@@ -701,7 +720,7 @@ export default function Dashboard({ setCurrentPage }) {
                   </div>
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm">Top Revenue Users</span>
+                      <span className="font-bold text-white text-sm">Top Revenue Levers</span>
                       {revenueUsers && revenueUsers.phone_numbers && revenueUsers.phone_numbers.length > 0 && (
                         <span className="px-2 py-0.5 bg-primary-500/20 text-primary-400 rounded-full text-xs font-semibold">
                           {revenueUsers.phone_numbers.length}
@@ -860,7 +879,7 @@ export default function Dashboard({ setCurrentPage }) {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <span>💰</span>
-              Top Opportunities (Revenue)
+              Top Revenue Opportunity
             </h3>
             {revenue.top_opportunities && revenue.top_opportunities.length > 0 ? (
               <div className="space-y-2">
@@ -889,7 +908,7 @@ export default function Dashboard({ setCurrentPage }) {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <span>💬</span>
-              Top Revenue Quotes
+              Member Interests Expressed
             </h3>
             {revenue.top_revenue_quotes && revenue.top_revenue_quotes.length > 0 ? (
               <div className="space-y-2">

@@ -197,6 +197,7 @@ class GenericSection(BaseModel):
     total_duration_seconds: Optional[int] = None
     average_duration_seconds: Optional[float] = None
     call_pickup_rate: Optional[float] = None  # Percentage of completed calls (completed / total)
+    average_gym_rating: Optional[float] = None  # Average gym rating across all calls
     block_1: Optional[float] = None  # Placeholder metric 1
     block_2: Optional[float] = None  # Placeholder metric 2
     top_pain_points: List[PainPoint] = Field(default_factory=list)  # Top pain points from all calls
