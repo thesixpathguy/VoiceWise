@@ -153,35 +153,35 @@ export default function LiveCallModal({ call, isOpen, onClose }) {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {/* Audio Player Button */}
+            <div className="flex items-center gap-3">
+              {/* Audio Player Button - Enhanced */}
               {!isPlayingAudio ? (
                 <button
                   onClick={handlePlayAudio}
-                  className="flex items-center gap-2 px-3 py-2 bg-primary-500/20 border border-primary-500/30 rounded-lg hover:bg-primary-500/30 transition-colors text-primary-400 text-sm font-medium"
-                  title="Play live audio"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-500/40 border-2 border-primary-500/70 rounded-lg hover:bg-primary-500/50 transition-all text-primary-200 text-sm font-semibold shadow-lg shadow-primary-500/20"
+                  title="Play live audio from Bland AI"
                 >
-                  <span className="text-lg">🔊</span>
-                  <span>Play</span>
+                  <span className="text-xl">🔊</span>
+                  <span>Play Audio</span>
                 </button>
               ) : (
                 <button
                   onClick={stopAudio}
-                  className="flex items-center gap-2 px-3 py-2 bg-red-500/20 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors text-red-400 text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500/40 border-2 border-red-500/70 rounded-lg hover:bg-red-500/50 transition-all text-red-200 text-sm font-semibold shadow-lg shadow-red-500/20"
                   title="Stop audio"
                 >
-                  <span className="text-lg">⏹️</span>
+                  <span className="text-xl">⏹️</span>
                   <span>Stop</span>
                 </button>
               )}
               
               {/* Status Indicator */}
               {isPlayingAudio && (
-                <div className="flex items-center gap-1 text-xs text-gray-400">
+                <div className="flex items-center gap-1 text-xs text-gray-300">
                   <div className="flex gap-0.5">
-                    <div className="w-1 h-2 bg-primary-500 rounded-full animate-pulse"></div>
-                    <div className="w-1 h-3 bg-primary-500 rounded-full animate-pulse animation-delay-100"></div>
-                    <div className="w-1 h-2 bg-primary-500 rounded-full animate-pulse animation-delay-200"></div>
+                    <div className="w-1 h-2 bg-primary-400 rounded-full animate-pulse"></div>
+                    <div className="w-1 h-3 bg-primary-400 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-1 h-2 bg-primary-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
                   </div>
                   <span className="ml-1">
                     {audioStatus === 'connecting' ? 'Connecting...' : 'Playing'}
@@ -191,7 +191,7 @@ export default function LiveCallModal({ call, isOpen, onClose }) {
 
               {/* Error Display */}
               {audioError && (
-                <div className="flex items-center gap-1 text-xs text-red-400">
+                <div className="flex items-center gap-1 text-xs text-red-300 bg-red-500/10 px-3 py-1 rounded-lg">
                   <span>⚠️</span>
                   <span>{audioError}</span>
                 </div>
