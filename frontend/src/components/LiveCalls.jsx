@@ -11,6 +11,13 @@ export default function LiveCalls() {
   const [audioStatus, setAudioStatus] = useState('idle');
   const messagesEndRefs = useRef({});
   const activeTabRef = useRef(null);
+  
+  // Retry tracking
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimeoutRef = useRef(null);
+  
+  // Track which calls disappeared between polls
+  const previousCallIdsRef = useRef(new Set());
 
   // Keep activeTabRef in sync with activeTab state
   useEffect(() => {
@@ -56,18 +63,25 @@ export default function LiveCalls() {
     };
   };
 
-  // Fetch live calls from API
+  // Fetch live calls from API with exponential backoff retry
   const fetchLiveCalls = useCallback(async () => {
     try {
       const apiCalls = await callsAPI.getLiveCalls();
       
       if (!apiCalls || apiCalls.length === 0) {
+        console.log('📞 No live calls from API');
         setLiveCalls([]);
         setActiveTab(null);
         setConversations({});
         setLoading(false);
+        // Reset retry count on successful fetch
+        if (retryCount > 0) {
+          setRetryCount(0);
+        }
         return;
       }
+      
+      console.log(`📞 Got ${apiCalls.length} live calls from API`);
       
       // Transform API calls to component format
       const transformedCalls = apiCalls.map(transformLiveCall);
@@ -77,11 +91,31 @@ export default function LiveCalls() {
         b.startTime.getTime() - a.startTime.getTime()
       );
       
-      // Update conversations state
+      // Identify calls that were in state but are no longer in API response
+      const currentCallIds = new Set(sortedCalls.map(c => c.id));
+      const disappearedCallIds = [...previousCallIdsRef.current].filter(id => !currentCallIds.has(id));
+      
+      // Log calls that disappeared
+      if (disappearedCallIds.length > 0) {
+        disappearedCallIds.forEach(id => {
+          console.log(`📴 Call ${id} disappeared from API response (call ended)`);
+        });
+      }
+      
+      // Update ref with current call IDs for next poll
+      previousCallIdsRef.current = currentCallIds;
+      
+      // Remove conversations for calls that are gone
+      if (activeTabRef.current && !currentCallIds.has(activeTabRef.current)) {
+        console.log(`❌ Active call ${activeTabRef.current} is no longer available`);
+      }
+      
+      // Update conversations state - keep only conversations for calls that still exist
       const newConversations = {};
       sortedCalls.forEach(call => {
         newConversations[call.id] = call.conversation || [];
       });
+      
       setConversations(newConversations);
       
       // Update live calls with sorted order
@@ -98,25 +132,77 @@ export default function LiveCalls() {
       }
       
       setLoading(false);
+      // Reset retry count on successful fetch
+      if (retryCount > 0) {
+        setRetryCount(0);
+        console.log('✅ API recovered - retry count reset');
+      }
     } catch (error) {
       console.error('Failed to fetch live calls:', error);
       setLoading(false);
-      // Don't clear existing calls on error to avoid flickering
+      
+      // Implement exponential backoff retry strategy
+      const maxRetries = 3; // Max 3 retries (2s, 4s, 8s)
+      const baseDelay = 2000; // Start with 2 seconds
+      const newRetryCount = retryCount + 1;
+      
+      if (newRetryCount <= maxRetries) {
+        // Calculate delay with exponential backoff: 2s, 4s, 8s, 16s, 32s
+        const delay = baseDelay * Math.pow(2, Math.min(newRetryCount - 1, 3));
+        const delaySeconds = Math.round(delay / 1000);
+        
+        console.warn(
+          `⚠️ API Error: Retry ${newRetryCount}/${maxRetries} in ${delaySeconds}s...`,
+          error.message
+        );
+        
+        setRetryCount(newRetryCount);
+        
+        // Clear any pending retry timeout
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+        }
+        
+        // Schedule retry with exponential backoff
+        retryTimeoutRef.current = setTimeout(() => {
+          console.log(`🔄 Retrying API call (attempt ${newRetryCount}/${maxRetries})...`);
+          fetchLiveCalls();
+        }, delay);
+      } else {
+        console.error('❌ Max retries exceeded. Clearing ONLY failed calls.');
+        
+        // On max retries, we can't determine which calls are still live
+        // Clear all state to be safe - but log this clearly
+        console.warn('ℹ️ Unable to verify call status after retries - clearing to prevent stale data');
+        setLiveCalls([]);
+        setActiveTab(null);
+        setConversations({});
+        setRetryCount(0); // Reset for next batch
+      }
     }
-  }, []);
+  }, [retryCount]);
 
-  // Poll API every 2 seconds
+  // Poll API every 2 seconds (when no retries are pending)
   useEffect(() => {
     // Initial fetch
     fetchLiveCalls();
     
-    // Set up polling interval
-    const interval = setInterval(() => {
-      fetchLiveCalls();
-    }, 2000); // Poll every 2 seconds
+    // Only set up polling if we're not in a retry backoff state
+    if (retryCount === 0) {
+      const interval = setInterval(() => {
+        fetchLiveCalls();
+      }, 2000); // Poll every 2 seconds
+      
+      return () => clearInterval(interval);
+    }
     
-    return () => clearInterval(interval);
-  }, [fetchLiveCalls]);
+    // Cleanup on unmount or when retry count changes
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [fetchLiveCalls, retryCount]);
 
   // Don't update activeTab on liveCalls change - keep user's selection
   // activeTab should only change if the selected call ends
