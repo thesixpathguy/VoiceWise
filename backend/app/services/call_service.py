@@ -42,7 +42,7 @@ class CallService:
         for index, phone_number in enumerate(phone_numbers):
             try:
                 # Add 30-second delay between calls (Bland AI rate limit)
-                if index > 0:
+                if index > 1:
                     print(f"⏳ Waiting 85 seconds before next call (Bland AI rate limit)...")
                     print(f"phone_number: {phone_number}")
                     await asyncio.sleep(85)
