@@ -6,8 +6,9 @@ from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 def get_database_url_with_ssl(database_url: str) -> str:
     """
-    Ensure DATABASE_URL has SSL parameters for Supabase/PostgreSQL.
-    Supabase requires SSL connections.
+    Ensure DATABASE_URL has proper SSL parameters.
+    - For local development: disable SSL
+    - For production (Supabase): require SSL
     """
     # Check if it's a PostgreSQL connection
     if "postgresql" not in database_url and "postgres" not in database_url:
@@ -16,9 +17,15 @@ def get_database_url_with_ssl(database_url: str) -> str:
     parsed = urlparse(database_url)
     query_params = parse_qs(parsed.query)
     
-    # Add SSL mode if not present (Supabase requires SSL)
+    # Determine SSL mode based on environment
+    # Local development: localhost or 127.0.0.1 = disable SSL
+    # Production (Supabase): require SSL
+    is_local = parsed.hostname in ('localhost', '127.0.0.1')
+    default_sslmode = 'disable' if is_local else 'require'
+    
+    # Add SSL mode if not present
     if 'sslmode' not in query_params:
-        query_params['sslmode'] = ['require']
+        query_params['sslmode'] = [default_sslmode]
     
     # Rebuild URL with SSL parameters
     new_query = urlencode(query_params, doseq=True)
@@ -31,9 +38,11 @@ database_url = get_database_url_with_ssl(settings.DATABASE_URL)
 # Create engine with SSL connection args for PostgreSQL
 connect_args = {}
 if "postgresql" in database_url or "postgres" in database_url:
-    # Supabase requires SSL - ensure it's set
+    # Determine SSL mode: local development disables SSL, production requires it
+    is_local = "localhost" in database_url or "127.0.0.1" in database_url
+    sslmode = "disable" if is_local else "require"
     connect_args = {
-        "sslmode": "require"
+        "sslmode": sslmode
     }
 
 engine = create_engine(

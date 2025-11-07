@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bland.ai — Robust Live Audio WS Tester</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;max-width:760px;margin:24px auto;padding:18px}
+  input,button{padding:10px;margin-top:8px;width:100%;font-size:1rem}
+  #status{margin-top:12px;font-weight:700}
+  pre{white-space:pre-wrap;background:#fafafa;padding:8px;border-radius:6px;display:none;max-height:240px;overflow:auto;margin-top:8px;font-size:12px}
+</style>
+</head>
+<body>
+  <h2>Bland.ai — Live Audio WS Tester (robust)</h2>
+
+  <label for="callId">Call ID</label>
+  <input id="callId" placeholder="call_123456" />
+
+  <label for="apiKey">(Optional) Server API key — only needed if you call the listen endpoint from the browser (not recommended)</label>
+  <input id="apiKey" placeholder="Bearer token (if you want to test fetch here)" />
+
+  <button id="start">Start Listening</button>
+  <button id="stop">Stop Listening</button>
+
+  <p id="status">Status: idle</p>
+  <pre id="rawResponse"></pre>
+
+<script>
+/*
+  Notes:
+  - This script tries to detect WAV vs raw PCM16LE and will resample from 16000 -> audioContext.sampleRate.
+  - It logs helpful diagnostics. Check DevTools console + the "Raw Response" panel.
+  - If the WS never opens, inspect the WS handshake in DevTools -> Network.
+*/
+
+let socket = null;
+let audioContext = null;
+let playing = false;
+const audioQueue = [];
+const rawEl = document.getElementById('rawResponse');
+
+document.getElementById('start').onclick = async () => {
+  const callId = document.getElementById('callId').value.trim();
+  const API_KEY = document.getElementById('apiKey').value.trim();
+
+  if (!callId) return alert('Enter call id');
+
+  setStatus('Requesting listen url from API...');
+
+  try {
+    const resp = await fetch(`https://api.bland.ai/v1/calls/${encodeURIComponent(callId)}/listen`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(API_KEY ? { Authorization: API_KEY } : {})
+      }
+    });
+
+    let json;
+    try { json = await resp.json(); } catch(e) {
+      const text = await resp.text().catch(()=>'<non-json>');
+      showRaw(`HTTP ${resp.status} ${resp.statusText}\n\n${text}`);
+      setStatus('Listen endpoint returned non-json');
+      return;
+    }
+
+    showRaw(JSON.stringify(json, null, 2));
+
+    if (!resp.ok) {
+      setStatus(`Listen request failed: ${resp.status}`);
+      return;
+    }
+
+    const wsUrl = json?.data?.url;
+    if (!wsUrl) {
+      setStatus('No url in API response');
+      return;
+    }
+
+    if (!/^wss?:\/\//i.test(wsUrl)) {
+      setStatus('Returned URL is not a websocket (likely a webhook)');
+      return;
+    }
+
+    // create AudioContext (user gesture happened by clicking start)
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    console.log('audioContext sampleRate:', audioContext.sampleRate);
+
+    startWebSocket(wsUrl);
+
+  } catch (err) {
+    console.error(err);
+    showRaw(String(err));
+    setStatus('Request failed');
+  }
+};
+
+document.getElementById('stop').onclick = async () => {
+  setStatus('Stopping');
+  if (socket) {
+    try { socket.close(); } catch(e){console.warn('socket close fail', e);}
+    socket = null;
+  }
+  if (audioContext) {
+    try { await audioContext.close(); } catch(e){console.warn('audioContext close', e);}
+    audioContext = null;
+  }
+  audioQueue.length = 0;
+  playing = false;
+  setStatus('Stopped');
+};
+
+function setStatus(s){ document.getElementById('status').textContent = `Status: ${s}`; }
+function showRaw(s){ rawEl.style.display='block'; rawEl.textContent = s; }
+
+function startWebSocket(wsUrl){
+  setStatus('Connecting to websocket...');
+  try {
+    socket = new WebSocket(wsUrl);
+    socket.binaryType = 'arraybuffer';
+  } catch (e) {
+    console.error('WebSocket construction failed', e);
+    setStatus('WebSocket creation failed');
+    return;
+  }
+
+  socket.onopen = () => {
+    console.log('[ws] open');
+    setStatus('WebSocket open — receiving audio');
+  };
+
+  socket.onerror = (ev) => {
+    console.error('[ws] error', ev);
+    setStatus('WebSocket error — check console/network tab');
+  };
+
+  socket.onclose = (ev) => {
+    console.log('[ws] close', ev);
+    setStatus(`WebSocket closed (code ${ev?.code || 'n/a'})`);
+    playing = false;
+  };
+
+  socket.onmessage = async (evt) => {
+    // log small diagnostic about message size
+    try {
+      if (typeof evt.data === 'string') {
+        console.log('[ws] received text message', evt.data.slice(0,200));
+        // some services send JSON control messages
+        try {
+          const j = JSON.parse(evt.data);
+          if (j?.type) console.log('control message type=', j.type);
+        } catch {}
+        return;
+      }
+
+      const ab = evt.data;
+      console.debug('[ws] received binary len=', ab.byteLength);
+
+      // very small heuristic: check first bytes for 'RIFF' (wav) or for JSON wrapper
+      const dv = new DataView(ab);
+      const header4 = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
+      if (header4 === 'RIFF') {
+        console.log('[ws] Detected WAV (RIFF). Using decodeAudioData()');
+        try {
+          const audioBuf = await decodeWav(ab);
+          enqueueAudioBuffer(audioBuf);
+        } catch (e) {
+          console.error('Error decoding WAV', e);
+        }
+        return;
+      }
+
+      // try decode as 16-bit PCM little-endian by default (common)
+      // If Bland uses mu-law or other format, this may be wrong — logs will help detect.
+      try {
+        const float32 = decodePCM16LE(ab);
+        // assume input sample rate = 16000 (Bland's realtime often uses 16k). If you know different, change the value here.
+        const inputSampleRate = 16000;
+        const finalFloat32 = await resampleIfNeeded(float32, inputSampleRate);
+        pushFloat32ToQueue(finalFloat32);
+      } catch (e) {
+        console.error('Failed to decode as PCM16LE — inspecting first bytes', e);
+        // dump first 32 bytes for debugging
+        const bytes = new Uint8Array(ab.slice(0,32));
+        console.log('first 32 bytes:', Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join(' '));
+        showRaw('Failed to decode binary chunk — see console for first bytes. You may be receiving mu-law or a different encoding.');
+      }
+    } catch (err) {
+      console.error('onmessage catch', err);
+    }
+  };
+}
+
+/* --- Decoders / helpers --- */
+
+function decodeWav(arrayBuffer){
+  // Use audioContext.decodeAudioData to parse full wav blob
+  return new Promise((res, rej) => {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    audioContext.decodeAudioData(arrayBuffer.slice(0), (buf) => res(buf), e => rej(e));
+  });
+}
+
+function decodePCM16LE(arrayBuffer){
+  const dv = new DataView(arrayBuffer);
+  const len = arrayBuffer.byteLength / 2;
+  const int16 = new Int16Array(len);
+  for (let i=0;i<len;i++){
+    int16[i] = dv.getInt16(i*2, true); // little endian
+  }
+
+  // Heuristic: if data looks stereo interleaved (and length even) — downmix by averaging pairs
+  // This is safe if source is mono (pair averaging will double-sample) but we prefer to keep it simple.
+  // We'll try mono first: assume mono. If you hear doubling/pitch issues, toggle stereoDownmix to true.
+  const stereoDownmix = false;
+
+  if (stereoDownmix && len % 2 === 0) {
+    const monoLen = len / 2;
+    const out = new Float32Array(monoLen);
+    for (let i=0,j=0;i<monoLen;i++,j+=2) {
+      // average left+right
+      out[i] = (int16[j] + int16[j+1]) / (2 * 32768);
+    }
+    return out;
+  } else {
+    const out = new Float32Array(len);
+    for (let i=0;i<len;i++) out[i] = int16[i] / 32768;
+    return out;
+  }
+}
+
+async function resampleIfNeeded(float32Samples, inputSampleRate=16000){
+  if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const targetRate = audioContext.sampleRate;
+  if (inputSampleRate === targetRate) {
+    return float32Samples;
+  }
+  // create an AudioBuffer with the input sample rate
+  const channels = 1;
+  const buffer = audioContext.createBuffer(channels, float32Samples.length, inputSampleRate);
+  buffer.copyToChannel(float32Samples, 0, 0);
+
+  // use OfflineAudioContext to resample
+  const targetLength = Math.round(float32Samples.length * targetRate / inputSampleRate);
+  const offline = new OfflineAudioContext(channels, targetLength, targetRate);
+  const src = offline.createBufferSource();
+  src.buffer = buffer;
+  src.connect(offline.destination);
+  src.start(0);
+  const rendered = await offline.startRendering();
+  const renderedData = rendered.getChannelData(0);
+  console.debug(`[resample] ${inputSampleRate} -> ${targetRate}, inLen=${float32Samples.length}, outLen=${renderedData.length}`);
+  return new Float32Array(renderedData); // copy
+}
+
+function pushFloat32ToQueue(f32){
+  audioQueue.push(f32);
+  if (!playing) {
+    playing = true;
+    playFromQueue();
+  }
+}
+
+/* if you want more audio-smoothness for very small chunks you can accumulate a buffer before playing */
+function enqueueAudioBuffer(audioBuffer){
+  // Convert AudioBuffer to float32 chunk at audioContext.sampleRate
+  const sampleRate = audioContext.sampleRate;
+  if (audioBuffer.sampleRate === sampleRate) {
+    // copy channel 0
+    pushFloat32ToQueue(audioBuffer.getChannelData(0).slice());
+  } else {
+    // resample using OfflineAudioContext for this buffer
+    (async ()=>{
+      const channels = audioBuffer.numberOfChannels;
+      const source = audioBuffer;
+      const offline = new OfflineAudioContext(1, Math.round(source.length * sampleRate / source.sampleRate), sampleRate);
+      const srcNode = offline.createBufferSource();
+      // mix to mono:
+      const mono = offline.createBuffer(1, source.length, source.sampleRate);
+      const tmp = new Float32Array(source.length);
+      for (let ch=0; ch<channels; ch++){
+        const d = source.getChannelData(ch);
+        for (let i=0;i<tmp.length;i++) tmp[i] = (i===0 ? 0 : tmp[i]) + d[i];
+      }
+      // actually average
+      for (let i=0;i<tmp.length;i++) tmp[i] = tmp[i] / channels;
+      mono.copyToChannel(tmp, 0, 0);
+      srcNode.buffer = mono;
+      srcNode.connect(offline.destination);
+      srcNode.start(0);
+      const rendered = await offline.startRendering();
+      pushFloat32ToQueue(rendered.getChannelData(0).slice());
+    })();
+  }
+}
+
+function playFromQueue(){
+  if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioQueue.length === 0) { playing = false; return; }
+
+  const chunk = audioQueue.shift();
+  try {
+    const buffer = audioContext.createBuffer(1, chunk.length, audioContext.sampleRate);
+    buffer.copyToChannel(chunk, 0);
+    const src = audioContext.createBufferSource();
+    src.buffer = buffer;
+    src.connect(audioContext.destination);
+    src.start();
+    src.onended = () => {
+      // schedule next
+      setTimeout(playFromQueue, 0);
+    };
+  } catch (e) {
+    console.error('playFromQueue error', e);
+    playing = false;
+  }
+}
+</script>
+</body>
+</html>
