@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { callsAPI } from '../api/api';
 import FilteredCallsModal from './FilteredCallsModal';
 import TrendCharts from './TrendCharts';
+import CompactDateSelector from './CompactDateSelector';
 
 export default function Dashboard({ setCurrentPage }) {
   const [summary, setSummary] = useState(null);
@@ -148,43 +149,16 @@ export default function Dashboard({ setCurrentPage }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4">
-      {/* Date Range Selector */}
-      <div className="mb-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">📅</span>
-            <h3 className="text-lg font-semibold text-white">Date Range Filter</h3>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-400">From:</label>
-              <input
-                type="date"
-                value={dateRange.startDate.split('/').reverse().join('-')} // Convert DD/MM/YYYY to YYYY-MM-DD for input
-                onChange={(e) => {
-                  const newDate = new Date(e.target.value).toLocaleDateString('en-GB');
-                  handleDateRangeChange(newDate, dateRange.endDate);
-                }}
-                className="bg-gray-900 border border-gray-600 rounded px-3 py-1 text-white text-sm focus:outline-none focus:border-primary-500"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-400">To:</label>
-              <input
-                type="date"
-                value={dateRange.endDate.split('/').reverse().join('-')} // Convert DD/MM/YYYY to YYYY-MM-DD for input
-                onChange={(e) => {
-                  const newDate = new Date(e.target.value).toLocaleDateString('en-GB');
-                  handleDateRangeChange(dateRange.startDate, newDate);
-                }}
-                className="bg-gray-900 border border-gray-600 rounded px-3 py-1 text-white text-sm focus:outline-none focus:border-primary-500"
-              />
-            </div>
-            <div className="text-sm text-gray-400">
-              ({dateRange.startDate} - {dateRange.endDate})
-            </div>
-          </div>
+      {/* Compact Date Range Selector */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          Business Intelligence Dashboard
         </div>
+        <CompactDateSelector
+          startDate={dateRange.startDate}
+          endDate={dateRange.endDate}
+          onDateRangeChange={handleDateRangeChange}
+        />
       </div>
 
       {/* Aesthetic Divider for Business Health Analysis Section */}
