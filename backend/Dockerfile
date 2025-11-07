@@ -47,6 +47,6 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Run migrations and start server (migrations will retry if DB is not ready)
-CMD alembic upgrade head || echo "⚠️ Migration failed, continuing anyway..." && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Start server (skip migrations - database already initialized)
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 
