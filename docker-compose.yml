@@ -80,6 +80,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_BLAND_AI_API_KEY: ${BLAND_AI_API_KEY}
     restart: unless-stopped
     container_name: voicewise-frontend
     ports:

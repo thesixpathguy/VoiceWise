@@ -104,9 +104,20 @@ export const callsAPI = {
   },
 
   // Get dashboard summary
-  getDashboardSummary: async (startDate, endDate, gymId = null) => {
-    const params = { start_date: startDate, end_date: endDate };
+  getDashboardSummary: async ({ startDate, endDate, gymId = null, churnThreshold = 0.8, revenueThreshold = 0.8 } = {}) => {
+    if (!startDate || !endDate) {
+      throw new Error('getDashboardSummary requires startDate and endDate (DD-MM-YYYY).');
+    }
+
+    const params = {
+      start_date: startDate,
+      end_date: endDate,
+      churn_threshold: churnThreshold,
+      revenue_threshold: revenueThreshold
+    };
+
     if (gymId) params.gym_id = gymId;
+
     const response = await api.get('/api/calls/dashboard/summary', { params });
     return response.data;
   },
@@ -119,25 +130,39 @@ export const callsAPI = {
   },
   
   // Get top churn user segments
-  getTopChurnUsers: async (gymId = null, startDate = null, endDate = null, threshold = 0.8, limit = 100) => {
-    const params = {};
+  getTopChurnUsers: async ({ gymId = null, startDate, endDate, threshold = 0.8, limit = 100 } = {}) => {
+    if (!startDate || !endDate) {
+      throw new Error('getTopChurnUsers requires startDate and endDate.');
+    }
+
+    const params = {
+      threshold,
+      limit
+    };
+
     if (gymId) params.gym_id = gymId;
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-    params.threshold = threshold;
-    params.limit = limit;
+    params.start_date = startDate;
+    params.end_date = endDate;
+
     const response = await api.get('/api/calls/user-segments/churn', { params });
     return response.data;
   },
   
   // Get top revenue user segments
-  getTopRevenueUsers: async (gymId = null, startDate = null, endDate = null, threshold = 0.8, limit = 100) => {
-    const params = {};
+  getTopRevenueUsers: async ({ gymId = null, startDate, endDate, threshold = 0.8, limit = 100 } = {}) => {
+    if (!startDate || !endDate) {
+      throw new Error('getTopRevenueUsers requires startDate and endDate.');
+    }
+
+    const params = {
+      threshold,
+      limit
+    };
+
     if (gymId) params.gym_id = gymId;
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-    params.threshold = threshold;
-    params.limit = limit;
+    params.start_date = startDate;
+    params.end_date = endDate;
+
     const response = await api.get('/api/calls/user-segments/revenue', { params });
     return response.data;
   },

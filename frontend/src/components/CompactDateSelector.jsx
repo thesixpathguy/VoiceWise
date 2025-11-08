@@ -6,12 +6,16 @@ export default function CompactDateSelector({ startDate, endDate, onDateRangeCha
   const [tempEndDate, setTempEndDate] = useState(endDate);
   const dropdownRef = useRef(null);
 
+  useEffect(() => {
+    setTempStartDate(startDate);
+    setTempEndDate(endDate);
+  }, [startDate, endDate]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
-        // Reset temp values if cancelled
         setTempStartDate(startDate);
         setTempEndDate(endDate);
       }
@@ -76,22 +80,24 @@ export default function CompactDateSelector({ startDate, endDate, onDateRangeCha
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Compact Date Display Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg hover:bg-gray-700/50 transition-colors text-sm"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-gray-900/70 border border-gray-700/80 shadow-inner shadow-black/40 hover:bg-gray-800/70 transition-colors text-sm text-gray-200 backdrop-blur"
       >
-        {/* Clock Icon */}
-        <div className="w-4 h-4 rounded-full border border-gray-400 flex items-center justify-center">
-          <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500/30 to-primary-500/10 border border-primary-400/40 flex items-center justify-center">
+          <svg
+            className="w-4 h-4 text-primary-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
         </div>
-        
-        {/* Date Range Text */}
-        <span className="text-gray-300 whitespace-nowrap">
-          {displayText}
-        </span>
-        
-        {/* Dropdown Arrow */}
+        <div className="flex flex-col text-left">
+          <span className="text-xs text-gray-400 uppercase tracking-[0.2em]">Date Range</span>
+          <span className="text-sm font-medium text-gray-100">{displayText}</span>
+        </div>
         <svg 
           className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none" 
@@ -102,67 +108,76 @@ export default function CompactDateSelector({ startDate, endDate, onDateRangeCha
         </svg>
       </button>
 
-      {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-80 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-700">
-            <h3 className="text-sm font-medium text-white">Custom Date Range</h3>
+        <div className="absolute top-full right-0 mt-3 w-[22rem] rounded-2xl border border-gray-700/70 bg-gray-900/95 backdrop-blur shadow-2xl shadow-primary-500/30 z-50 overflow-hidden">
+          <div className="bg-gradient-to-r from-primary-500/10 via-transparent to-blue-500/10 px-5 py-4 border-b border-gray-800">
+            <h3 className="text-sm font-semibold text-white">Select Reporting Window</h3>
           </div>
 
-          {/* Date Inputs */}
-          <div className="p-4 space-y-4">
-            {/* Start Date */}
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">
+          <div className="p-5 space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-[0.2em]">
                 From
               </label>
+                <div className="relative">
               <input
                 type="date"
                 value={formatForInput(tempStartDate)}
                 onChange={(e) => setTempStartDate(formatFromInput(e.target.value))}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => {
-                  e.target.showPicker?.();
-                }}
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:border-blue-500 cursor-pointer select-none"
-                style={{ userSelect: 'none' }}
-              />
+                    className="w-full px-3 py-2 rounded-lg bg-gray-950/80 border border-gray-700/70 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-transparent"
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-primary-400">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                </div>
             </div>
 
-            {/* End Date */}
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-[0.2em]">
                 To
               </label>
+                <div className="relative">
               <input
                 type="date"
                 value={formatForInput(tempEndDate)}
                 onChange={(e) => setTempEndDate(formatFromInput(e.target.value))}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => {
-                  e.target.showPicker?.();
-                }}
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:border-blue-500 cursor-pointer select-none"
-                style={{ userSelect: 'none' }}
-              />
+                    className="w-full px-3 py-2 rounded-lg bg-gray-950/80 border border-gray-700/70 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-transparent"
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-primary-400">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
-
           </div>
 
-          {/* Footer Buttons */}
-          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-700">
+          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-800 bg-gray-900/80">
             <button
               onClick={handleCancel}
-              className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleApply}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md transition-colors"
+              className="px-5 py-2 rounded-full bg-gradient-to-r from-primary-500 to-blue-500 text-white text-sm font-semibold shadow-lg shadow-primary-500/30 hover:from-primary-400 hover:to-blue-400 transition-all"
             >
-              Apply
+              Apply Range
             </button>
           </div>
         </div>
