@@ -1,244 +1,142 @@
-# 🚀 VoiceWise - Quick Start Guide
+# 🚀 VoiceWise Quick Start
 
-Get your VoiceWise project up and running in minutes!
+Get the VoiceWise stack running locally with either manual tooling or Docker Compose.
 
-## 🎯 Tech Stack
+---
 
-**Frontend:** React 19 + Vite + Tailwind CSS + Supabase JS  
-**Backend:** FastAPI + SQLAlchemy + Supabase (PostgreSQL)  
-**Package Managers:** npm (frontend) + pip (backend)
+## 1. Prerequisites
 
-## Prerequisites
+- Python ≥ 3.9 (project built against 3.9.6)
+- Node.js ≥ 18 and npm
+- Docker Desktop (optional for Compose)
+- Supabase project (or local Postgres) and credentials
+- Bland AI + Groq API keys
 
-- ✅ **Python 3.9.6** (you have it!)
-- ✅ **Node.js & npm** (you have it!)
-- 🔑 **Supabase Account** (sign up at [supabase.com](https://supabase.com))
+---
 
-## ⚙️ Manual Setup
+## 2. Environment Files
 
-### Backend Setup
+From the repository root:
+
+```bash
+cp .env.example .env                   # root (Compose + shared secrets)
+cp backend/.env.example backend/.env   # FastAPI service
+cp frontend/.env.example frontend/.env # Vite frontend
+```
+
+Populate the placeholders:
+
+- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`
+- `DATABASE_URL` (for non-Docker workflows)
+- `GROQ_API_KEY`, `BLAND_AI_API_KEY`, optional `BLAND_AI_WEBHOOK_URL`
+- `VITE_API_URL` (defaults to `http://localhost:8000` for manual runs)
+- `VITE_BLAND_AI_API_KEY` (required for live call widgets)
+
+> When running under Docker Compose the backend uses `DATABASE_URL=postgresql://postgres:postgres@db:5432/postgres`, so you only need to provide remote credentials if you prefer Supabase.
+
+---
+
+## 3. Manual Setup (Two Terminals)
+
+### Backend (Terminal 1)
 
 ```bash
 cd backend
-
-# Create virtual environment
 python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate
-
-# Install dependencies
+source venv/bin/activate               # Windows: venv\Scripts\activate or .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-# Copy environment template
-cp .env.example .env
+alembic upgrade head                   # creates tables/indexes
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Frontend Setup
+### Frontend (Terminal 2)
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Copy environment template
-cp .env.example .env
+npm run dev -- --host --port 5173
 ```
 
-## 🔐 Configure Supabase
+### Access
 
-### 1. Create Supabase Project
-
-1. Go to [supabase.com/dashboard](https://supabase.com/dashboard)
-2. Click "New Project"
-3. Fill in project details and wait for setup to complete
-
-### 2. Get Your Credentials
-
-**API Settings:**
-
-- Go to Project Settings > API
-- Copy your **Project URL** and **anon/public key**
-
-**Database Settings:**
-
-- Go to Project Settings > Database
-- Copy your **Connection String** (use Transaction pooler for better performance)
-
-### 3. Update Environment Files
-
-**Backend `.env`:**
-
-```bash
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-anon-key
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-region.pooler.supabase.com:5432/postgres
-
-# Add your AI API keys
-BLAND_AI_API_KEY=your_bland_ai_key
-GROQ_API_KEY=your_groq_key
-```
-
-**Frontend `.env`:**
-
-```bash
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_API_URL=http://localhost:8000
-```
-
-## 🗄️ Database Setup
-
-Run Alembic migrations to create your database tables:
-
-```bash
-cd backend
-source venv/bin/activate
-alembic revision --autogenerate -m "Initial migration"
-alembic upgrade head
-```
-
-## 🏃‍♂️ Run the Application
-
-### Option 1: Two Terminals
-
-**Terminal 1 - Backend (activate the virtualenv & run FastAPI)**
-
-Follow the commands for your OS / shell.
-
-- macOS / Linux (bash / zsh):
-
-```bash
-cd backend
-python3 -m venv venv   # only if you haven't created the venv yet
-source venv/bin/activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-- Windows PowerShell:
-
-```powershell
-cd backend
-python -m venv venv   # only if you haven't created the venv yet
-# If you get an execution policy error, see the note below
-.\venv\Scripts\Activate.ps1
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-- Windows Command Prompt (CMD):
-
-```cmd
-cd backend
-python -m venv venv   # only if you haven't created the venv yet
-venv\Scripts\activate.bat
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-PowerShell note: if running the PowerShell activation command fails with an execution policy error, you can temporarily allow scripts for the current session by running:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
-```
-
-This only changes the policy for the current PowerShell window and is safe for development.
-
-**Terminal 2 - Frontend:**
-
-```bash
-cd frontend
-npm run dev
-```
-
-### Access Your Application
-
-- **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:8000
-- **API Docs:** http://localhost:8000/docs
-
-## 🎨 What's Included
-
-### Backend (FastAPI + Supabase)
-
-- ✅ FastAPI framework
-- ✅ SQLAlchemy ORM
-- ✅ Supabase integration
-- ✅ Alembic migrations
-- ✅ Pydantic validation
-- ✅ AI integrations (Groq, Whisper)
-
-### Frontend (React + Vite + Tailwind CSS)
-
-- ✅ React 19
-- ✅ Vite for blazing-fast development
-- ✅ Tailwind CSS utility-first styling
-- ✅ Supabase JS client
-- ✅ Axios for HTTP requests
-- ✅ React Router for navigation
-- ✅ Modern, responsive UI with custom VoiceWise theme
-
-## 🐛 Troubleshooting
-
-**Virtual environment not activating?**
-
-```bash
-# Make sure you're in the backend directory
-cd /Users/pranjalbhatt/Desktop/Hackathon/voicewise/backend
-source venv/bin/activate
-```
-
-**Port already in use?**
-
-```bash
-# Find and kill process on port 8000
-lsof -ti:8000 | xargs kill -9
-
-# Find and kill process on port 5173
-lsof -ti:5173 | xargs kill -9
-```
-
-**Module not found errors?**
-
-```bash
-# Backend: Reinstall dependencies
-cd backend
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Frontend: Reinstall dependencies
-cd frontend
-rm -rf node_modules package-lock.json
-npm install
-```
-
-**Database connection errors?**
-
-- Verify your `DATABASE_URL` in `.env`
-- Check if your Supabase project is active
-- Ensure you're using the correct connection string (pooler vs direct)
-
-## 📖 Documentation
-
-- **Main README:** `README.md` - Complete project documentation
-- **Frontend Guide:** `frontend/README.md` - Tailwind CSS examples and React components
-- **Backend Guide:** `backend/README.md` - API structure and database setup
-- [Supabase Docs](https://supabase.com/docs)
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [React Docs](https://react.dev/)
-- [Vite Docs](https://vite.dev/)
-- [Tailwind CSS Docs](https://tailwindcss.com/docs)
-
-## 💡 Tips
-
-- **Supabase Dashboard:** View and edit your data at supabase.com/dashboard
-- **API Docs:** Test endpoints interactively at http://localhost:8000/docs
-- **Hot Reload:** Both frontend and backend have hot reload enabled
-- **VS Code Extension:** Install "Tailwind CSS IntelliSense" for autocomplete
+- Frontend dev server: http://localhost:5173
+- Backend API: http://localhost:8000
+- API docs (Swagger): http://localhost:8000/docs
 
 ---
 
-**Ready to build? Start the servers and open http://localhost:5173!** 🚀
+## 4. Docker Compose Workflow
+
+1. Ensure `.env` is populated with the AI + Supabase keys.
+2. Bring the stack up:
+
+   ```bash
+   docker compose down                  # optional reset
+   docker compose up --build
+   ```
+
+3. Services exposed locally:
+   - Frontend (nginx): http://localhost
+   - FastAPI backend: http://localhost:8000
+   - PostgreSQL (pgvector): localhost:5433 → `postgres/postgres`
+
+4. Apply migrations (first run):
+
+   ```bash
+   docker compose exec backend alembic upgrade head
+   ```
+
+5. Tear down while keeping volumes:
+
+   ```bash
+   docker compose down
+   ```
 
 ---
 
-Need help? Check the main [README.md](./README.md) for more detailed information!
+## 5. Supabase Configuration (Optional Remote DB)
+
+1. Create a project at [supabase.com/dashboard](https://supabase.com/dashboard).
+2. Retrieve:
+   - **Project URL** & **anon/public API key** (`Project Settings → API`).
+   - **Service role key** (if needed for background jobs).
+   - **Connection string** (`Project Settings → Database` → use the pooled connection).
+3. Update `.env` and `backend/.env` accordingly, swapping out the default Docker `DATABASE_URL`.
+
+---
+
+## 6. Common Commands
+
+```bash
+# Backend linting / formatting (after installing your tools of choice)
+black app && ruff check app
+
+# Frontend linting
+npm run lint
+
+# Rerun embeddings backfill
+python backend/backfill_embeddings.py
+```
+
+---
+
+## 7. Troubleshooting
+
+- **Virtualenv issues:** Ensure you activated the environment from `backend/`.
+- **Ports busy:** Use `lsof -ti:8000 | xargs kill -9` (macOS/Linux) to free the backend port, same for `5173`.
+- **Module import errors:** Reinstall dependencies (`pip install -r requirements.txt` or `npm install`).
+- **Database connection failures:** Double-check `DATABASE_URL` and ensure the Supabase project (or Docker service) is live.
+- **CORS errors:** Confirm `CORS_ORIGINS` in `backend/.env` contains the host running your frontend.
+
+---
+
+## 8. Helpful Links
+
+- Main documentation: `README.md`
+- Tailwind/styling tips: `frontend/TAILWIND.md`
+- Audio feature blueprint: `AUDIO_FEATURE.md`
+- Supabase docs: https://supabase.com/docs
+- FastAPI docs: https://fastapi.tiangolo.com/
+- Vite docs: https://vite.dev/
+
+Happy building! Once everything is running, head to http://localhost:5173 (manual) or http://localhost (Docker) to explore the dashboard. 🚀
