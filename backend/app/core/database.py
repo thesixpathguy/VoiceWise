@@ -17,7 +17,8 @@ def get_database_url_with_ssl(database_url: str) -> str:
     parsed = urlparse(database_url)
     
     # Check if it's a local connection (using hostname, not substring match)
-    local_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+    # Include Docker service names (db, postgres) and local addresses
+    local_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "db", "postgres"}
     is_local = parsed.hostname in local_hosts
     
     # Local connections don't need SSL modifications

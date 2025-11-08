@@ -558,7 +558,7 @@ async def get_prompt_filtered_users(
             search_type="nlp",
             gym_id=gym_id,
             limit=limit * 2,  # Get more results to account for filtering
-            similarity_threshold=0.7
+            similarity_threshold=0.54
         )
         
         # Extract unique phone numbers from search results

@@ -1,22 +1,102 @@
 version: '3.8'
 
 services:
+  # PostgreSQL with pgvector extension
   db:
-    # Use an image with pgvector preinstalled so the VECTOR type is available.
-    # ankane/pgvector is a lightweight Postgres image that includes the pgvector extension.
     image: ankane/pgvector
     restart: unless-stopped
+    container_name: voicewise-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
     ports:
-      # Map container's 5432 to host 5433 to avoid conflict with a local Postgres service
       - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-      # Run any *.sql files in backend/postgres-init at first initialization to enable extensions
       - ./backend/postgres-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - voicewise-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    container_name: voicewise-backend
+    environment:
+      # Database (override for Docker internal network)
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
+      
+      # Supabase
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      
+      # AI Services
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      BLAND_AI_API_KEY: ${BLAND_AI_API_KEY}
+      BLAND_AI_WEBHOOK_URL: ${BLAND_AI_WEBHOOK_URL:-}
+      
+      # Application Settings
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
+      PORT: ${PORT:-8000}
+      
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:80,http://localhost}
+      
+      # Gym Configuration
+      GYM_NAME: ${GYM_NAME:-VoiceWise Gym}
+      GYM_ID: ${GYM_ID:-gym_001}
+      
+      # Whisper Model
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - /app/venv  # Prevent overwriting venv
+    networks:
+      - voicewise-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    container_name: voicewise-frontend
+    ports:
+      - "80:80"
+    networks:
+      - voicewise-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  voicewise-network:
+    driver: bridge
 
 volumes:
   db_data:
