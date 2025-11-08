@@ -140,43 +140,6 @@ export default function InitiateCalls() {
         </div>
       </div>
 
-      {/* Search Segment Info */}
-      {searchSegment && (
-        <div className="mb-6 bg-primary-500/10 border border-primary-500/30 rounded-xl p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">🔍</span>
-                <h3 className="text-lg font-semibold text-primary-400">Search Segment</h3>
-              </div>
-              <div className="space-y-1 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">Type:</span>
-                  <span className="text-white font-medium capitalize">
-                    {searchSegment.searchType === 'sentiment' ? 'Sentiment Search' : 'NLP Search'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">Query:</span>
-                  <span className="text-white font-medium">"{searchSegment.query}"</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">Members:</span>
-                  <span className="text-primary-400 font-semibold">{searchSegment.resultCount} phone numbers</span>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => setSearchSegment(null)}
-              className="text-gray-400 hover:text-white transition-colors"
-              title="Dismiss"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Form */}
       <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-8">
         <form onSubmit={handleSubmit} className="space-y-6">

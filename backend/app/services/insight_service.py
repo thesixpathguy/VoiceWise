@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, case
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Set, Any
 from datetime import datetime, timedelta
 from collections import defaultdict
 import asyncio
@@ -42,6 +42,30 @@ class InsightService:
                 InsightService._queue_processor_task = asyncio.create_task(
                     InsightService._process_live_call_queue()
                 )
+    
+    @staticmethod
+    def _normalize_insight_text(value: Any) -> Optional[str]:
+        """
+        Normalize different insight formats (string, dict, etc.) to a trimmed string.
+        Returns None for empty/unsupported values.
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        if isinstance(value, dict):
+            candidate = value.get("name")
+            if isinstance(candidate, str):
+                normalized = candidate.strip()
+                return normalized or None
+        if isinstance(value, list):
+            # Sometimes nested lists are returned; join into single string
+            joined = " ".join(str(v) for v in value if v is not None)
+            joined = joined.strip()
+            return joined or None
+        normalized = str(value).strip()
+        return normalized or None
     
     async def analyze_and_store_insights(
         self,
@@ -251,10 +275,20 @@ class InsightService:
             average_rating = round(float(avg_rating_value), 1)
         
         # Top pain points from all calls
-        top_pain_points = self._get_top_pain_points(gym_id, limit=5)
+        top_pain_points = self._get_top_pain_points(
+            gym_id=gym_id,
+            start_date=start_dt,
+            end_date=end_dt_with_time,
+            limit=5
+        )
         
         # Top opportunities from all calls
-        top_opportunities = self._get_top_opportunities(gym_id, limit=5)
+        top_opportunities = self._get_top_opportunities(
+            gym_id=gym_id,
+            start_date=start_dt,
+            end_date=end_dt_with_time,
+            limit=5
+        )
         
         generic_section = GenericSection(
             total_calls=total_calls,
@@ -286,10 +320,22 @@ class InsightService:
                 churn_avg_rating = round(ratings_sum / ratings_count, 1)
         
         # Top 5 pain points from churn calls
-        churn_pain_points = self._get_top_pain_points_from_churn_calls(gym_id, churn_threshold, limit=5)
+        churn_pain_points = self._get_top_pain_points_from_churn_calls(
+            gym_id=gym_id,
+            start_date=start_dt,
+            end_date=end_dt_with_time,
+            churn_threshold=churn_threshold,
+            limit=5
+        )
         
         # Top 5 churn interest quotes (highest churn scores, filtered by threshold)
-        churn_quotes = self._get_churn_interest_quotes(gym_id, churn_threshold, limit=5)
+        churn_quotes = self._get_churn_interest_quotes(
+            gym_id=gym_id,
+            start_date=start_dt,
+            end_date=end_dt_with_time,
+            churn_threshold=churn_threshold,
+            limit=5
+        )
         
         churn_section = ChurnInterestSection(
             total_calls=churn_calls_count,
@@ -314,10 +360,22 @@ class InsightService:
                 revenue_avg_rating = round(ratings_sum / ratings_count, 1)
         
         # Top 5 opportunities from revenue calls
-        revenue_opportunities = self._get_top_opportunities_from_revenue_calls(gym_id, revenue_threshold, limit=5)
+        revenue_opportunities = self._get_top_opportunities_from_revenue_calls(
+            gym_id=gym_id,
+            start_date=start_dt,
+            end_date=end_dt_with_time,
+            revenue_threshold=revenue_threshold,
+            limit=5
+        )
         
         # Top 5 revenue interest quotes (highest revenue scores, filtered by threshold)
-        revenue_quotes = self._get_high_interest_quotes(gym_id, revenue_threshold, limit=5)
+        revenue_quotes = self._get_high_interest_quotes(
+            gym_id=gym_id,
+            start_date=start_dt,
+            end_date=end_dt_with_time,
+            revenue_threshold=revenue_threshold,
+            limit=5
+        )
         
         revenue_section = RevenueInterestSection(
             total_calls=revenue_calls_count,
@@ -336,6 +394,8 @@ class InsightService:
     def _get_top_pain_points(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         limit: int = 5
     ) -> List[PainPoint]:
         """
@@ -349,37 +409,52 @@ class InsightService:
             List of PainPoint objects
         """
         # Filter out low confidence insights (confidence < 0.3)
-        query = self.db.query(Insight).filter(Insight.confidence >= 0.3)
+        query = (
+            self.db.query(Insight.call_id, Insight.pain_points)
+            .join(Call, Call.call_id == Insight.call_id)
+            .filter(
+                Insight.confidence >= 0.3,
+                Insight.pain_points.isnot(None)
+            )
+        )
         
         if gym_id:
-            query = query.join(Call).filter(Call.gym_id == gym_id)
+            query = query.filter(Call.gym_id == gym_id)
+        if start_date:
+            query = query.filter(Call.created_at >= start_date)
+        if end_date:
+            query = query.filter(Call.created_at <= end_date)
         
-        # Get all insights with pain points (only high confidence)
-        insights = query.filter(Insight.pain_points.isnot(None)).all()
+        insights = query.all()
         
-        # Count pain point occurrences
-        pain_point_counts = {}
-        for insight in insights:
-            if insight.pain_points:
-                for pain_point in insight.pain_points:
-                    pain_point_lower = pain_point.lower().strip()
-                    pain_point_counts[pain_point_lower] = pain_point_counts.get(pain_point_lower, 0) + 1
+        # Count pain point occurrences by unique call
+        pain_point_calls: Dict[str, Set[str]] = defaultdict(set)
+        for call_id, pain_points in insights:
+            if pain_points:
+                for pain_point in pain_points:
+                    normalized = self._normalize_insight_text(pain_point)
+                    if not normalized:
+                        continue
+                    pain_point_lower = normalized.lower()
+                    pain_point_calls[pain_point_lower].add(call_id)
         
         # Sort by count and return top N
         sorted_pain_points = sorted(
-            pain_point_counts.items(),
-            key=lambda x: x[1],
+            pain_point_calls.items(),
+            key=lambda x: len(x[1]),
             reverse=True
         )[:limit]
         
         return [
-            PainPoint(name=name.capitalize(), count=count)
-            for name, count in sorted_pain_points
+            PainPoint(name=name.capitalize(), count=len(call_ids))
+            for name, call_ids in sorted_pain_points
         ]
     
     def _get_top_opportunities(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         limit: int = 5
     ) -> List[PainPoint]:
         """
@@ -393,37 +468,51 @@ class InsightService:
             List of PainPoint objects (using same schema for consistency)
         """
         # Filter out low confidence insights (confidence < 0.3)
-        query = self.db.query(Insight).filter(Insight.confidence >= 0.3)
+        query = (
+            self.db.query(Insight.call_id, Insight.opportunities)
+            .join(Call, Call.call_id == Insight.call_id)
+            .filter(
+                Insight.confidence >= 0.3,
+                Insight.opportunities.isnot(None)
+            )
+        )
         
         if gym_id:
-            query = query.join(Call).filter(Call.gym_id == gym_id)
+            query = query.filter(Call.gym_id == gym_id)
+        if start_date:
+            query = query.filter(Call.created_at >= start_date)
+        if end_date:
+            query = query.filter(Call.created_at <= end_date)
         
-        # Get all insights with opportunities (only high confidence)
-        insights = query.filter(Insight.opportunities.isnot(None)).all()
+        insights = query.all()
         
-        # Count opportunity occurrences
-        opportunity_counts = {}
-        for insight in insights:
-            if insight.opportunities:
-                for opportunity in insight.opportunities:
-                    opportunity_lower = opportunity.lower().strip()
-                    opportunity_counts[opportunity_lower] = opportunity_counts.get(opportunity_lower, 0) + 1
+        opportunity_calls: Dict[str, Set[str]] = defaultdict(set)
+        for call_id, opportunities in insights:
+            if opportunities:
+                for opportunity in opportunities:
+                    normalized = self._normalize_insight_text(opportunity)
+                    if not normalized:
+                        continue
+                    opportunity_lower = normalized.lower()
+                    opportunity_calls[opportunity_lower].add(call_id)
         
         # Sort by count and return top N
         sorted_opportunities = sorted(
-            opportunity_counts.items(),
-            key=lambda x: x[1],
+            opportunity_calls.items(),
+            key=lambda x: len(x[1]),
             reverse=True
         )[:limit]
         
         return [
-            PainPoint(name=name.capitalize(), count=count)
-            for name, count in sorted_opportunities
+            PainPoint(name=name.capitalize(), count=len(call_ids))
+            for name, call_ids in sorted_opportunities
         ]
     
     def _get_top_pain_points_from_churn_calls(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         churn_threshold: float = 0.5,
         limit: int = 5
     ) -> List[PainPoint]:
@@ -439,40 +528,52 @@ class InsightService:
             List of PainPoint objects
         """
         # Filter for churn calls with high confidence
-        query = self.db.query(Insight).filter(
-            Insight.confidence >= 0.3,
-            Insight.churn_score >= churn_threshold
+        query = (
+            self.db.query(Insight.call_id, Insight.pain_points)
+            .join(Call, Call.call_id == Insight.call_id)
+            .filter(
+                Insight.confidence >= 0.3,
+                Insight.churn_score >= churn_threshold,
+                Insight.pain_points.isnot(None)
+            )
         )
         
         if gym_id:
-            query = query.join(Call).filter(Call.gym_id == gym_id)
+            query = query.filter(Call.gym_id == gym_id)
+        if start_date:
+            query = query.filter(Call.created_at >= start_date)
+        if end_date:
+            query = query.filter(Call.created_at <= end_date)
         
-        # Get all insights with pain points
-        insights = query.filter(Insight.pain_points.isnot(None)).all()
+        insights = query.all()
         
-        # Count pain point occurrences
-        pain_point_counts = {}
-        for insight in insights:
-            if insight.pain_points:
-                for pain_point in insight.pain_points:
-                    pain_point_lower = pain_point.lower().strip()
-                    pain_point_counts[pain_point_lower] = pain_point_counts.get(pain_point_lower, 0) + 1
+        pain_point_calls: Dict[str, Set[str]] = defaultdict(set)
+        for call_id, pain_points in insights:
+            if pain_points:
+                for pain_point in pain_points:
+                    normalized = self._normalize_insight_text(pain_point)
+                    if not normalized:
+                        continue
+                    pain_point_lower = normalized.lower()
+                    pain_point_calls[pain_point_lower].add(call_id)
         
         # Sort by count and return top N
         sorted_pain_points = sorted(
-            pain_point_counts.items(),
-            key=lambda x: x[1],
+            pain_point_calls.items(),
+            key=lambda x: len(x[1]),
             reverse=True
         )[:limit]
         
         return [
-            PainPoint(name=name.capitalize(), count=count)
-            for name, count in sorted_pain_points
+            PainPoint(name=name.capitalize(), count=len(call_ids))
+            for name, call_ids in sorted_pain_points
         ]
     
     def _get_top_opportunities_from_revenue_calls(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         revenue_threshold: float = 0.5,
         limit: int = 5
     ) -> List[PainPoint]:
@@ -488,40 +589,52 @@ class InsightService:
             List of PainPoint objects (using same schema for consistency)
         """
         # Filter for revenue calls with high confidence
-        query = self.db.query(Insight).filter(
-            Insight.confidence >= 0.3,
-            Insight.revenue_interest_score >= revenue_threshold
+        query = (
+            self.db.query(Insight.call_id, Insight.opportunities)
+            .join(Call, Call.call_id == Insight.call_id)
+            .filter(
+                Insight.confidence >= 0.3,
+                Insight.revenue_interest_score >= revenue_threshold,
+                Insight.opportunities.isnot(None)
+            )
         )
         
         if gym_id:
-            query = query.join(Call).filter(Call.gym_id == gym_id)
+            query = query.filter(Call.gym_id == gym_id)
+        if start_date:
+            query = query.filter(Call.created_at >= start_date)
+        if end_date:
+            query = query.filter(Call.created_at <= end_date)
         
-        # Get all insights with opportunities
-        insights = query.filter(Insight.opportunities.isnot(None)).all()
+        insights = query.all()
         
-        # Count opportunity occurrences
-        opportunity_counts = {}
-        for insight in insights:
-            if insight.opportunities:
-                for opportunity in insight.opportunities:
-                    opportunity_lower = opportunity.lower().strip()
-                    opportunity_counts[opportunity_lower] = opportunity_counts.get(opportunity_lower, 0) + 1
+        opportunity_calls: Dict[str, Set[str]] = defaultdict(set)
+        for call_id, opportunities in insights:
+            if opportunities:
+                for opportunity in opportunities:
+                    normalized = self._normalize_insight_text(opportunity)
+                    if not normalized:
+                        continue
+                    opportunity_lower = normalized.lower()
+                    opportunity_calls[opportunity_lower].add(call_id)
         
         # Sort by count and return top N
         sorted_opportunities = sorted(
-            opportunity_counts.items(),
-            key=lambda x: x[1],
+            opportunity_calls.items(),
+            key=lambda x: len(x[1]),
             reverse=True
         )[:limit]
         
         return [
-            PainPoint(name=name.capitalize(), count=count)
-            for name, count in sorted_opportunities
+            PainPoint(name=name.capitalize(), count=len(call_ids))
+            for name, call_ids in sorted_opportunities
         ]
     
     def _get_churn_interest_quotes(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         churn_threshold: float = 0.75,
         limit: int = 5
     ) -> List[ChurnInterestQuote]:
@@ -549,6 +662,10 @@ class InsightService:
         
         if gym_id:
             query = query.filter(Call.gym_id == gym_id)
+        if start_date:
+            query = query.filter(Call.created_at >= start_date)
+        if end_date:
+            query = query.filter(Call.created_at <= end_date)
         
         query = query.order_by(Insight.churn_score.desc(), Insight.confidence.desc()).limit(limit)
         
@@ -578,6 +695,8 @@ class InsightService:
     def _get_high_interest_quotes(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         revenue_threshold: float = 0.75,
         limit: int = 5
     ) -> List[HighInterestQuote]:
@@ -606,6 +725,10 @@ class InsightService:
         
         if gym_id:
             query = query.filter(Call.gym_id == gym_id)
+        if start_date:
+            query = query.filter(Call.created_at >= start_date)
+        if end_date:
+            query = query.filter(Call.created_at <= end_date)
         
         # Order by score and get more results than needed, then filter in Python
         query = query.order_by(Insight.revenue_interest_score.desc(), Insight.confidence.desc()).limit(limit * 2)  # Get extra to account for filtering
@@ -701,9 +824,14 @@ class InsightService:
     ) -> List[Dict]:
         """Get churn score trend data over time - CACHED"""
         # Convert string dates from DD-MM-YYYY format to datetime objects
-        from datetime import datetime
+        from datetime import datetime, timedelta
         start_dt = datetime.strptime(start_date, "%d-%m-%Y") if start_date else None
         end_dt = datetime.strptime(end_date, "%d-%m-%Y") if end_date else None
+        
+        if start_dt:
+            start_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        if end_dt:
+            end_dt = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=23, minutes=59, seconds=59)
         
         # Use simple full caching for better performance (cache entire result)
         return CacheService.get_trend_data(
@@ -776,9 +904,14 @@ class InsightService:
     ) -> List[Dict]:
         """Get revenue interest score trend data over time - CACHED"""
         # Convert string dates from DD-MM-YYYY format to datetime objects
-        from datetime import datetime
+        from datetime import datetime, timedelta
         start_dt = datetime.strptime(start_date, "%d-%m-%Y") if start_date else None
         end_dt = datetime.strptime(end_date, "%d-%m-%Y") if end_date else None
+        
+        if start_dt:
+            start_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        if end_dt:
+            end_dt = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=23, minutes=59, seconds=59)
         
         # Use simple full caching for better performance (cache entire result)
         return CacheService.get_trend_data(
@@ -881,9 +1014,14 @@ class InsightService:
     ) -> Dict:
         """Get sentiment distribution trend data over time - CACHED"""
         # Convert string dates from DD-MM-YYYY format to datetime objects
-        from datetime import datetime
+        from datetime import datetime, timedelta
         start_dt = datetime.strptime(start_date, "%d-%m-%Y") if start_date else None
         end_dt = datetime.strptime(end_date, "%d-%m-%Y") if end_date else None
+        
+        if start_dt:
+            start_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        if end_dt:
+            end_dt = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=23, minutes=59, seconds=59)
         
         # Use simple full caching for better performance (cache entire result)
         trend_data = CacheService.get_trend_data(

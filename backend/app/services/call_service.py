@@ -661,7 +661,9 @@ class CallService:
         pain_point: Optional[str] = None,
         gym_id: Optional[str] = None,
         limit: int = 100,
-        top_n: int = 3
+        top_n: int = 3,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> List[dict]:
         """
         Get phone numbers from calls with top N most common pain points (latest call per phone number)
@@ -677,48 +679,60 @@ class CallService:
             List of dicts with phone_number, call_id, pain_points, created_at
         """
         from app.models.models import Insight
-        from sqlalchemy import desc, func, or_
-        from sqlalchemy.dialects.postgresql import ARRAY
-        from sqlalchemy import cast, String
-        
+        from sqlalchemy import desc, func, or_, text
+        from datetime import datetime, timedelta
+
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%d-%m-%Y")
+            except (ValueError, TypeError):
+                start_dt = None
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+                end_dt = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+            except (ValueError, TypeError):
+                end_dt = None
+
         # If no specific pain point provided, get top N most common pain points using SQL aggregation
         if not pain_point:
             # Use PostgreSQL's unnest to expand the pain_points array and count occurrences
             # This is much more efficient than loading all insights into memory
-            from sqlalchemy import text
-            
-            # Build the query with optional gym_id filter
+            conditions = [
+                "i.confidence >= 0.3",
+                "i.pain_points IS NOT NULL"
+            ]
+            params = {"top_n": top_n}
+
             if gym_id:
-                top_pain_points_query = text("""
-                    SELECT 
-                        LOWER(TRIM(unnested_pain_point)) as pain_point,
-                        COUNT(*) as count
-                    FROM insights i
-                    JOIN calls c ON i.call_id = c.call_id
-                    CROSS JOIN LATERAL unnest(i.pain_points) as unnested_pain_point
-                    WHERE i.confidence >= 0.3
-                        AND i.pain_points IS NOT NULL
-                        AND c.gym_id = :gym_id
-                    GROUP BY LOWER(TRIM(unnested_pain_point))
-                    ORDER BY count DESC
-                    LIMIT :top_n
-                """)
-                result = self.db.execute(top_pain_points_query, {"gym_id": gym_id, "top_n": top_n})
+                conditions.append("c.gym_id = :gym_id")
+                params["gym_id"] = gym_id
             else:
-                top_pain_points_query = text("""
-                    SELECT 
-                        LOWER(TRIM(unnested_pain_point)) as pain_point,
-                        COUNT(*) as count
-                    FROM insights i
-                    CROSS JOIN LATERAL unnest(i.pain_points) as unnested_pain_point
-                    WHERE i.confidence >= 0.3
-                        AND i.pain_points IS NOT NULL
-                    GROUP BY LOWER(TRIM(unnested_pain_point))
-                    ORDER BY count DESC
-                    LIMIT :top_n
-                """)
-                result = self.db.execute(top_pain_points_query, {"top_n": top_n})
-            
+                conditions.append("TRUE")  # Ensure WHERE clause always valid with JOIN
+
+            if start_dt:
+                conditions.append("c.created_at >= :start_dt")
+                params["start_dt"] = start_dt
+            if end_dt:
+                conditions.append("c.created_at <= :end_dt")
+                params["end_dt"] = end_dt
+
+            top_pain_points_query = text(f"""
+                SELECT 
+                    LOWER(TRIM(unnested_pain_point)) as pain_point,
+                    COUNT(*) as count
+                FROM insights i
+                JOIN calls c ON i.call_id = c.call_id
+                CROSS JOIN LATERAL unnest(i.pain_points) as unnested_pain_point
+                WHERE {' AND '.join(conditions)}
+                GROUP BY LOWER(TRIM(unnested_pain_point))
+                ORDER BY count DESC
+                LIMIT :top_n
+            """)
+            result = self.db.execute(top_pain_points_query, params)
+
             # Extract pain points from the result
             top_pain_points = [row[0] for row in result]
             
@@ -728,17 +742,7 @@ class CallService:
             # Use the specific pain point provided
             top_pain_points = [pain_point.lower()]
         
-        # Subquery to get latest call per phone number
-        latest_calls_subquery = (
-            self.db.query(
-                Call.phone_number,
-                func.max(Call.created_at).label('latest_created_at')
-            )
-            .group_by(Call.phone_number)
-            .subquery()
-        )
-        
-        # Main query: Join calls with insights, filter by top pain points, get latest per phone
+        # Main query: Join calls with insights, filter by top pain points, order by recency
         query = (
             self.db.query(
                 Call.phone_number,
@@ -747,11 +751,6 @@ class CallService:
                 Call.created_at
             )
             .join(Insight, Call.call_id == Insight.call_id)
-            .join(
-                latest_calls_subquery,
-                (Call.phone_number == latest_calls_subquery.c.phone_number) &
-                (Call.created_at == latest_calls_subquery.c.latest_created_at)
-            )
             .filter(Insight.pain_points.isnot(None))
             .filter(Insight.confidence >= 0.3)  # Only high-confidence insights
         )
@@ -769,20 +768,35 @@ class CallService:
         
         if gym_id:
             query = query.filter(Call.gym_id == gym_id)
+
+        if start_dt:
+            query = query.filter(Call.created_at >= start_dt)
+        if end_dt:
+            query = query.filter(Call.created_at <= end_dt)
         
-        query = query.order_by(desc(Call.created_at)).limit(limit)
+        query = query.order_by(desc(Call.created_at)).limit(limit * 5 if limit else 500)
         
         results = query.all()
+
+        seen_numbers = set()
+        output = []
+        for row in results:
+            phone = row.phone_number
+            if phone in seen_numbers:
+                continue
+            seen_numbers.add(phone)
+            output.append(
+                {
+                    "phone_number": row.phone_number,
+                    "call_id": row.call_id,
+                    "pain_points": row.pain_points if row.pain_points else [],
+                    "created_at": row.created_at.isoformat() if row.created_at else None
+                }
+            )
+            if len(output) >= limit:
+                break
         
-        return [
-            {
-                "phone_number": row.phone_number,
-                "call_id": row.call_id,
-                "pain_points": row.pain_points if row.pain_points else [],
-                "created_at": row.created_at.isoformat() if row.created_at else None
-            }
-            for row in results
-        ]
+        return output
     
     def get_latest_call_by_phone_number(
         self,

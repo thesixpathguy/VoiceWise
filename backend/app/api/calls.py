@@ -120,6 +120,11 @@ async def list_calls(
         cached_result = CacheService.get_chart_calls(
             fetch_func=fetch_chart_data,
             gym_id=gym_id,
+            status=status,
+            sentiment=sentiment,
+            pain_point=pain_point,
+            opportunity=opportunity,
+            revenue_interest=revenue_interest,
             start_date=start_date,
             end_date=end_date,
             churn_min_score=churn_min_score,
@@ -515,6 +520,8 @@ async def get_top_revenue_users(
 async def get_pain_point_users(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
     pain_point: Optional[str] = Query(None, description="Specific pain point to filter by (case-insensitive). If not provided, returns users with TOP 3 most common pain points."),
+    start_date: Optional[str] = Query(None, description="Start date in DD-MM-YYYY format"),
+    end_date: Optional[str] = Query(None, description="End date in DD-MM-YYYY format"),
     limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
     db: Session = Depends(get_db)
 ):
@@ -534,7 +541,9 @@ async def get_pain_point_users(
             pain_point=pain_point,
             gym_id=gym_id,
             limit=limit,
-            top_n=3  # Get users with TOP 3 most common pain points
+            top_n=3,  # Get users with TOP 3 most common pain points
+            start_date=start_date,
+            end_date=end_date
         )
         return {
             "pain_point": pain_point,
