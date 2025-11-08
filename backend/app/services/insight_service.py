@@ -804,16 +804,26 @@ class InsightService:
         if start_date is None:
             start_date = end_date - timedelta(days=days)
         
-        # Base query
-        query = self.db.query(
-            Insight.sentiment,
-            Insight.call_id,
-            Call.created_at
-        ).join(Call, Insight.call_id == Call.call_id).filter(
-            Insight.sentiment.isnot(None),
-            Insight.confidence >= 0.3,
+        from sqlalchemy import or_
+
+        # Base query using outer join so we include calls without insights yet
+        query = (
+            self.db.query(
+                Call.created_at,
+                Call.call_id,
+                Insight.sentiment.label('insight_sentiment'),
+                Insight.confidence.label('insight_confidence')
+            )
+            .outerjoin(Insight, Insight.call_id == Call.call_id)
+            .filter(
             Call.created_at >= start_date,
-            Call.created_at <= end_date
+                Call.created_at <= end_date,
+                or_(
+                    Insight.id.is_(None),  # Calls without insights yet
+                    Insight.confidence.is_(None),
+                    Insight.confidence >= 0.3  # Include only reliable AI insights
+                )
+            )
         )
         
         if gym_id:
@@ -823,12 +833,14 @@ class InsightService:
         
         # Group by date and sentiment
         data_by_date = defaultdict(lambda: {"positive": [], "neutral": [], "negative": [], "call_ids": []})
-        for sentiment, call_id, created_at in results:
+        for created_at, call_id, insight_sentiment, _ in results:
             date_key = created_at.date().isoformat()
-            if sentiment:
-                sentiment_lower = sentiment.lower()
-                if sentiment_lower in ["positive", "neutral", "negative"]:
-                    data_by_date[date_key][sentiment_lower].append(call_id)
+            sentiment_to_use = (insight_sentiment or 'neutral').lower()
+            if sentiment_to_use in ["positive", "neutral", "negative"]:
+                data_by_date[date_key][sentiment_to_use].append(call_id)
+            else:
+                # Treat unclassified sentiment as neutral so counts line up
+                data_by_date[date_key]["neutral"].append(call_id)
             data_by_date[date_key]["call_ids"].append(call_id)
         
         # Format for stacked area chart

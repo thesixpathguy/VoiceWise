@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { callsAPI } from '../api/api';
 
 export default function CallsList() {
@@ -13,11 +13,21 @@ export default function CallsList() {
   const [pickupStats, setPickupStats] = useState(null);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    loadCalls(currentPage);
-    loadSummary();
-    loadPickupStats();
-  }, [currentPage]);
+  const defaultDateRange = useMemo(() => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const formatForAPI = (date) => {
+      const dd = String(date.getDate()).padStart(2, '0');
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const yyyy = date.getFullYear();
+      return `${dd}-${mm}-${yyyy}`;
+    };
+
+    return {
+      startDate: formatForAPI(thirtyDaysAgo),
+      endDate: formatForAPI(today)
+    };
+  }, []);
 
   const loadPickupStats = async () => {
     try {
@@ -31,7 +41,20 @@ export default function CallsList() {
 
   const loadSummary = async () => {
     try {
-      const data = await callsAPI.getDashboardSummary();
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const formatForAPI = (date) => {
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+      };
+
+      const data = await callsAPI.getDashboardSummary({
+        startDate: formatForAPI(thirtyDaysAgo),
+        endDate: formatForAPI(today)
+      });
       console.log('Dashboard summary data:', data);
       console.log('Generic data:', data.generic);
       setGeneric(data.generic || {});
@@ -40,16 +63,24 @@ export default function CallsList() {
     }
   };
 
-  const loadCalls = async (page = 1) => {
+  const loadCalls = async (page = 1, extraParams = {}) => {
     try {
       setLoading(true);
       // Ensure page is a valid number, default to 1 if invalid
       const pageNum = Number(page) || 1;
       const skip = Math.max(0, (pageNum - 1) * itemsPerPage);
-      const response = await callsAPI.listCalls({ 
+      const params = { 
         limit: itemsPerPage, 
-        skip: skip 
-      });
+        skip: skip,
+        ...extraParams
+      };
+
+      if (!params.start_date || !params.end_date) {
+        params.start_date = defaultDateRange.startDate;
+        params.end_date = defaultDateRange.endDate;
+      }
+
+      const response = await callsAPI.listCalls(params);
       
       // Handle both old format (array) and new format (object with calls and total)
       const calls = Array.isArray(response) ? response : (response.calls || []);
@@ -108,12 +139,21 @@ export default function CallsList() {
   const totalPages = Math.ceil(totalCalls / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
 
-  const handlePageChange = (page) => {
+  const [currentFilters, setCurrentFilters] = useState({});
+
+  const handlePageChange = (page, filters = currentFilters) => {
     setCurrentPage(page);
+    setCurrentFilters(filters);
     setSelectedCall(null); // Clear selection when changing pages
     setInsights(null);
-    loadCalls(page); // Load the new page from server
+    loadCalls(page, filters); // Load the new page from server
   };
+
+  useEffect(() => {
+    loadCalls(currentPage, currentFilters);
+    loadSummary();
+    loadPickupStats();
+  }, [currentPage, currentFilters, defaultDateRange]);
 
   const handleAnalyze = async (callId) => {
     try {
@@ -131,7 +171,7 @@ export default function CallsList() {
   const handleRefresh = () => {
     // Reset to page 1 and reload
     setCurrentPage(1);
-    loadCalls(1);
+    loadCalls(1, currentFilters);
     loadSummary();
     loadPickupStats();
   };

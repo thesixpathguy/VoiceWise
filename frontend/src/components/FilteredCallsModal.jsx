@@ -81,6 +81,22 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
         skip: skip
       };
       
+      const normalizeDateParam = (value) => {
+        if (!value) return undefined;
+        if (value.includes('T')) {
+          const date = new Date(value);
+          const dd = String(date.getUTCDate()).padStart(2, '0');
+          const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+          const yyyy = date.getUTCFullYear();
+          return `${dd}-${mm}-${yyyy}`;
+        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          const [yyyy, mm, dd] = value.split('-');
+          return `${dd}-${mm}-${yyyy}`;
+        }
+        return value; // assume already in DD-MM-YYYY
+      };
+      
       if (filterType === 'sentiment') {
         params.sentiment = filterValue;
       } else if (filterType === 'pain_point') {
@@ -105,16 +121,40 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
         params.churn_min_score = filterValue;
         params.order_by = 'churn_score_desc'; // Order by decreasing churn score
       } else if (filterType === 'revenue_min_score') {
-        params.revenue_min_score = filterValue;
-        params.order_by = 'revenue_score_desc'; // Order by decreasing revenue score
+        const minScore = parseFloat(filterValue) || 0.8;
+        params.revenue_min_score = minScore;
+        params.order_by = 'revenue_score_desc';
+
+        // Inject the same date range used on the dashboard if available
+        if (filterLabel && filterLabel.includes('Calls on')) {
+          // When coming from a specific date in the chart, filterValue will include date range
+        }
       } else if (filterType === 'date_range') {
         // Format: "start_date|end_date" (ISO date strings)
         const [startDate, endDate] = filterValue.split('|');
-        params.start_date = startDate;
-        params.end_date = endDate;
+        const normalizedStart = normalizeDateParam(startDate);
+        const normalizedEnd = normalizeDateParam(endDate);
+        if (normalizedStart) params.start_date = normalizedStart;
+        if (normalizedEnd) params.end_date = normalizedEnd;
       } else if (filterType === 'call_id') {
         // For specific call IDs, load that call directly
         // This is handled by the specificCallId prop and loadSpecificCall
+      }
+
+      if (!params.start_date || !params.end_date) {
+        // When opening from the revenue card, reuse the dashboard date range stored in localStorage
+        const cachedRange = localStorage.getItem('dashboardDateRange');
+        if (cachedRange) {
+          try {
+            const parsed = JSON.parse(cachedRange);
+            if (parsed.startDate && parsed.endDate) {
+              params.start_date = params.start_date || parsed.startDate;
+              params.end_date = params.end_date || parsed.endDate;
+            }
+          } catch (e) {
+            console.warn('Failed to parse dashboardDateRange cache', e);
+          }
+        }
       }
       
       const response = await callsAPI.listCalls(params);

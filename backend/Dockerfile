@@ -15,7 +15,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install CPU-only torch first (much smaller: ~500MB vs ~5GB)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir torch>=2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Final stage - minimal runtime image
@@ -25,6 +25,7 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y \
     libpq5 \
     postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean \
     && apt-get autoremove -y

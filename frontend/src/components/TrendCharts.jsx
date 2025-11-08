@@ -31,6 +31,13 @@ export default function TrendCharts({ type, gymId, startDate, endDate, onPointCl
       return date.toISOString().split('T')[0];
     };
     
+    const formatDateForApi = (date) => {
+      const dd = String(date.getDate()).padStart(2, '0');
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const yyyy = date.getFullYear();
+      return `${dd}-${mm}-${yyyy}`;
+    };
+    
     // Create cache key using date range instead of days
     const cacheKey = `${chartType}-${threshold}-${startDate}-${endDate}`;
     
@@ -142,10 +149,10 @@ export default function TrendCharts({ type, gymId, startDate, endDate, onPointCl
       // Fetch calls - optimized: limit to 100 for better performance
       // We can still show all calls but with a smaller dataset for faster rendering
       const params = {
-        limit: 100, // Reduced from 200 to 100 for better performance
+        limit: 100,
         skip: 0,
-        start_date: startDateObj.toISOString(),
-        end_date: endDateObj.toISOString(),
+        start_date: formatDateForApi(startDateObj),
+        end_date: formatDateForApi(endDateObj)
       };
       
       // Order by score descending to show highest scores first
@@ -457,12 +464,13 @@ export default function TrendCharts({ type, gymId, startDate, endDate, onPointCl
     // Pass date range: start of day to end of day
     const dateStr = payload.dateString || payload.date;
     if (dateStr) {
-      // Create date range for the entire day (00:00:00 to 23:59:59)
-      const startDate = `${dateStr}T00:00:00.000Z`;
-      const endDate = `${dateStr}T23:59:59.999Z`;
-      // Call onPointClick with date range format
+      const dateObj = new Date(dateStr + 'T00:00:00Z');
+      const dd = String(dateObj.getUTCDate()).padStart(2, '0');
+      const mm = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+      const yyyy = dateObj.getUTCFullYear();
+      const formatted = `${dd}-${mm}-${yyyy}`;
       if (onPointClick) {
-        onPointClick(null, `${startDate}|${endDate}`, dateStr);
+        onPointClick(null, `${formatted}|${formatted}`, `${yyyy}-${mm}-${dd}`);
       }
     }
   };

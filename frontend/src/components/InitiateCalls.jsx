@@ -11,6 +11,22 @@ export default function InitiateCalls() {
   const [error, setError] = useState(null);
   const [searchSegment, setSearchSegment] = useState(null);
   
+  const formatDateForAPI = (date) => {
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  };
+
+  const getDefaultDateRange = () => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return {
+      startDate: formatDateForAPI(thirtyDaysAgo),
+      endDate: formatDateForAPI(today)
+    };
+  };
+
   // Prompt modal state
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [userPrompt, setUserPrompt] = useState('');
@@ -196,7 +212,14 @@ export default function InitiateCalls() {
                     setLoading(true);
                     setError(null);
                     setResult(null);
-                    const data = await callsAPI.getTopChurnUsers(gymId, 0.8, 100);
+                    const { startDate, endDate } = getDefaultDateRange();
+                    const data = await callsAPI.getTopChurnUsers({
+                      gymId,
+                      startDate,
+                      endDate,
+                      threshold: 0.8,
+                      limit: 100
+                    });
                     if (data && data.phone_numbers && data.phone_numbers.length > 0) {
                       const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
                       setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
@@ -251,7 +274,14 @@ export default function InitiateCalls() {
                     setLoading(true);
                     setError(null);
                     setResult(null);
-                    const data = await callsAPI.getTopRevenueUsers(gymId, 0.8, 100);
+                    const { startDate, endDate } = getDefaultDateRange();
+                    const data = await callsAPI.getTopRevenueUsers({
+                      gymId,
+                      startDate,
+                      endDate,
+                      threshold: 0.8,
+                      limit: 100
+                    });
                     if (data && data.phone_numbers && data.phone_numbers.length > 0) {
                       const numbers = data.phone_numbers.map(u => u.phone_number).join('\n');
                       setPhoneNumbers(prev => prev ? `${prev}\n${numbers}` : numbers);
@@ -289,7 +319,7 @@ export default function InitiateCalls() {
             <div className="flex items-center justify-between mb-2">
               <label htmlFor="phoneNumbers" className="block text-sm font-medium text-gray-300">
               Member contact
-              </label>
+            </label>
               {phoneNumbers && (
                 <button
                   type="button"
@@ -484,19 +514,19 @@ export default function InitiateCalls() {
         {showInfo && (
           <div className="mt-2 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <ul className="space-y-1 text-xs text-gray-400">
-              <li className="flex items-start gap-2">
+          <li className="flex items-start gap-2">
                 <span className="text-blue-400">1.</span>
                 <span>AI calls members → Gathers feedback → Records & transcribes</span>
-              </li>
-              <li className="flex items-start gap-2">
+          </li>
+          <li className="flex items-start gap-2">
                 <span className="text-blue-400">2.</span>
                 <span>Extracts insights: satisfaction, concerns, opportunities</span>
-              </li>
-              <li className="flex items-start gap-2">
+          </li>
+          <li className="flex items-start gap-2">
                 <span className="text-blue-400">3.</span>
                 <span>View results in Dashboard to improve your gym</span>
-              </li>
-            </ul>
+          </li>
+        </ul>
           </div>
         )}
       </div>

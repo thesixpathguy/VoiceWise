@@ -17,8 +17,13 @@ export default function Dashboard({ setCurrentPage }) {
   });
   const [churnUsers, setChurnUsers] = useState(null);
   const [revenueUsers, setRevenueUsers] = useState(null);
+  const [concernUsers, setConcernUsers] = useState(null);
+  const [concernLoading, setConcernLoading] = useState(false);
+  const [activeChurnTab, setActiveChurnTab] = useState(false);
+  const [activeRevenueTab, setActiveRevenueTab] = useState(false);
   const [selectedChurnCall, setSelectedChurnCall] = useState(null);
   const [selectedRevenueCall, setSelectedRevenueCall] = useState(null);
+  const [selectedConcernCall, setSelectedConcernCall] = useState(null);
   const [sentimentChartType, setSentimentChartType] = useState('area'); // 'area', 'line', 'stackedBar', 'radar'
   const [churnChartType, setChurnChartType] = useState('avgLine'); // 'avgLine', 'scatter'
   const [revenueChartType, setRevenueChartType] = useState('avgLine'); // 'avgLine', 'scatter'
@@ -44,7 +49,7 @@ export default function Dashboard({ setCurrentPage }) {
       setLoading(true);
       const startDate = formatDateForAPI(dateRange.startDate);
       const endDate = formatDateForAPI(dateRange.endDate);
-      const data = await callsAPI.getDashboardSummary(startDate, endDate);
+      const data = await callsAPI.getDashboardSummary({ startDate, endDate });
       setSummary(data);
       setError(null);
     } catch (err) {
@@ -67,7 +72,7 @@ export default function Dashboard({ setCurrentPage }) {
           const threshold = summary.churn_interest.churn_threshold || 0.8;
           const startDate = formatDateForAPI(dateRange.startDate);
           const endDate = formatDateForAPI(dateRange.endDate);
-          const data = await callsAPI.getTopChurnUsers(null, startDate, endDate, threshold, 100);
+          const data = await callsAPI.getTopChurnUsers({ startDate, endDate, threshold, limit: 100 });
           setChurnUsers(data);
         } catch (err) {
           console.error('Failed to load churn users:', err);
@@ -85,7 +90,7 @@ export default function Dashboard({ setCurrentPage }) {
           const threshold = summary.revenue_interest.revenue_threshold || 0.8;
           const startDate = formatDateForAPI(dateRange.startDate);
           const endDate = formatDateForAPI(dateRange.endDate);
-          const data = await callsAPI.getTopRevenueUsers(null, startDate, endDate, threshold, 100);
+          const data = await callsAPI.getTopRevenueUsers({ startDate, endDate, threshold, limit: 100 });
           setRevenueUsers(data);
         } catch (err) {
           console.error('Failed to load revenue users:', err);
@@ -95,12 +100,57 @@ export default function Dashboard({ setCurrentPage }) {
     }
   }, [summary, dateRange]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchConcerns = async () => {
+      try {
+        setConcernLoading(true);
+        const data = await callsAPI.getPainPointUsers(null, null, 100);
+        if (!isMounted) return;
+
+        const payload = {
+          phone_numbers: data?.phone_numbers || [],
+          total_count: typeof data?.total_count === 'number'
+            ? data.total_count
+            : (data?.phone_numbers?.length || 0),
+        };
+
+        setConcernUsers(payload);
+      } catch (err) {
+        console.error('Failed to load top concern users:', err);
+        if (isMounted) {
+          setConcernUsers({ phone_numbers: [], total_count: 0 });
+        }
+      } finally {
+        if (isMounted) {
+          setConcernLoading(false);
+        }
+      }
+    };
+
+    fetchConcerns();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Handle date range change
   const handleDateRangeChange = (newStartDate, newEndDate) => {
-    setDateRange({
+    const updatedRange = {
       startDate: newStartDate,
       endDate: newEndDate
-    });
+    };
+    setDateRange(updatedRange);
+    try {
+      localStorage.setItem('dashboardDateRange', JSON.stringify({
+        startDate: formatDateForAPI(newStartDate),
+        endDate: formatDateForAPI(newEndDate)
+      }));
+    } catch (error) {
+      console.warn('Failed to persist dashboard date range', error);
+    }
     // Clear user data to force reload
     setChurnUsers(null);
     setRevenueUsers(null);
@@ -146,14 +196,43 @@ export default function Dashboard({ setCurrentPage }) {
   const generic = summary.generic || {};
   const churn = summary.churn_interest || {};
   const revenue = summary.revenue_interest || {};
+  const topConcernFocus = (() => {
+    const explicitTop = Array.isArray(generic.top_pain_points)
+      ? generic.top_pain_points.slice(0, 3).map((item) => item.name).filter(Boolean)
+      : [];
+
+    if (explicitTop.length > 0) {
+      return explicitTop;
+    }
+
+    if (!concernUsers?.phone_numbers || concernUsers.phone_numbers.length === 0) {
+      return [];
+    }
+
+    const counts = new Map();
+    concernUsers.phone_numbers.forEach((user) => {
+      (user.pain_points || []).forEach((point) => {
+        if (!point) return;
+        const normalized = point.toLowerCase().trim();
+        counts.set(normalized, {
+          label: point,
+          count: (counts.get(normalized)?.count || 0) + 1
+        });
+      });
+    });
+
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .map((entry) => entry.label);
+  })();
+
+  const topConcernLabel = topConcernFocus.length > 0 ? topConcernFocus.join(', ') : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4">
       {/* Compact Date Range Selector */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="text-sm text-gray-500">
-          Business Intelligence Dashboard
-        </div>
+      <div className="mb-6 flex items-center justify-end">
         <CompactDateSelector
           startDate={dateRange.startDate}
           endDate={dateRange.endDate}
@@ -181,53 +260,142 @@ export default function Dashboard({ setCurrentPage }) {
       <div className="mb-6">
         {/* Compact Layout: Stats + Chart in one row, Pain Points + Opportunities below */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          {/* Stats Grid - Compact 3x3 Grid */}
-          <div className="grid grid-cols-3 gap-2 lg:col-span-1">
-            {/* Total Calls - Purple, Clickable */}
-            <div 
-              onClick={() => setCurrentPage('calls')}
-              className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 cursor-pointer hover:bg-purple-500/20 transition-all flex flex-col items-center justify-center"
-            >
-              <span className="text-gray-400 text-sm mb-0.5">Total Calls</span>
-              <p className="text-xl font-bold text-purple-400">{generic.total_calls || 0}</p>
+          {/* Stats + Top Concerns Segment */}
+          <div className="lg:col-span-1 space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              {/* Total Calls - Purple, Clickable */}
+              <div 
+                onClick={() => setCurrentPage('calls')}
+                className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 cursor-pointer hover:bg-purple-500/20 transition-all flex flex-col items-center justify-center"
+              >
+                <span className="text-gray-400 text-sm mb-0.5">Total Calls</span>
+                <p className="text-xl font-bold text-purple-400">{generic.total_calls || 0}</p>
+              </div>
+
+              {/* Positive Sentiment - Green, Clickable */}
+              <div 
+                onClick={() => openFilterModal('sentiment', 'positive', `Positive Sentiment Calls (${generic.positive_sentiment || 0})`)}
+                className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 cursor-pointer hover:bg-green-500/20 transition-all flex flex-col items-center justify-center"
+              >
+                <span className="text-gray-400 text-sm mb-0.5">Positive Calls</span>
+                <p className="text-xl font-bold text-green-400">{generic.positive_sentiment || 0}</p>
+              </div>
+
+              {/* Negative Sentiment - Red, Clickable */}
+              <div 
+                onClick={() => openFilterModal('sentiment', 'negative', `Negative Sentiment Calls (${generic.negative_sentiment || 0})`)}
+                className="bg-red-500/10 border border-red-500/30 rounded-lg p-2 cursor-pointer hover:bg-red-500/20 transition-all flex flex-col items-center justify-center"
+              >
+                <span className="text-gray-400 text-sm mb-0.5">Negative Calls</span>
+                <p className="text-xl font-bold text-red-400">{generic.negative_sentiment || 0}</p>
+              </div>
             </div>
 
-            {/* Positive Sentiment - Green, Clickable */}
-            <div 
-              onClick={() => openFilterModal('sentiment', 'positive', `Positive Sentiment Calls (${generic.positive_sentiment || 0})`)}
-              className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 cursor-pointer hover:bg-green-500/20 transition-all flex flex-col items-center justify-center"
-            >
-              <span className="text-gray-400 text-sm mb-0.5">Positive Calls</span>
-              <p className="text-xl font-bold text-green-400">{generic.positive_sentiment || 0}</p>
-            </div>
+            {/* Top Concern Users Segment */}
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg">
+              <div className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 rounded-t-lg flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 bg-red-500/20 rounded-lg">
+                    <span className="text-lg">👥</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm">Top Concern Members</span>
+                      {concernUsers?.phone_numbers && concernUsers.phone_numbers.length > 0 && (
+                        <span className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded-full text-xs font-semibold">
+                          {concernUsers.total_count || concernUsers.phone_numbers.length}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {concernUsers?.phone_numbers && concernUsers.phone_numbers.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const phoneNumbers = concernUsers.phone_numbers.map((u) => u.phone_number).join('\n');
+                      localStorage.setItem('initiateCalls_phoneNumbers', phoneNumbers);
+                      const segment = {
+                        query: topConcernLabel || 'Top concerns segment',
+                        searchType: 'pain_point',
+                        resultCount: concernUsers.total_count || concernUsers.phone_numbers.length,
+                        timestamp: new Date().toISOString()
+                      };
+                      localStorage.setItem('initiateCalls_searchSegment', JSON.stringify(segment));
+                      setCurrentPage('initiate');
+                    }}
+                    className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors shadow-lg"
+                    title={`Call All ${concernUsers.phone_numbers.length} users`}
+                  >
+                    <span className="text-lg">📞</span>
+                  </button>
+                )}
+              </div>
 
-            {/* Negative Sentiment - Red, Clickable */}
-            <div 
-              onClick={() => openFilterModal('sentiment', 'negative', `Negative Sentiment Calls (${generic.negative_sentiment || 0})`)}
-              className="bg-red-500/10 border border-red-500/30 rounded-lg p-2 cursor-pointer hover:bg-red-500/20 transition-all flex flex-col items-center justify-center"
-            >
-              <span className="text-gray-400 text-sm mb-0.5">Negative Calls</span>
-              <p className="text-xl font-bold text-red-400">{generic.negative_sentiment || 0}</p>
-            </div>
+              <div className="p-2 max-h-48 overflow-y-auto">
+                {concernLoading ? (
+                  <p className="text-gray-500 text-center py-4 text-xs">Loading top concern members...</p>
+                ) : concernUsers?.phone_numbers && concernUsers.phone_numbers.length > 0 ? (
+                  <div className="space-y-1">
+                    {concernUsers.phone_numbers.map((user, index) => (
+                      <div
+                        key={`${user.phone_number}_${index}`}
+                        onClick={async () => {
+                          try {
+                            const call = await callsAPI.getLatestCallByPhone(user.phone_number);
+                            if (call && call.call_id) {
+                              setSelectedConcernCall({ call, phoneNumber: user.phone_number });
+                            }
+                          } catch (err) {
+                            console.error('Failed to load call:', err);
+                            alert(`Failed to load call: ${err.message || err}`);
+                          }
+                        }}
+                        className={`flex flex-col gap-1 p-2 rounded-lg cursor-pointer transition-all text-xs border ${
+                          selectedConcernCall?.phoneNumber === user.phone_number
+                            ? 'bg-red-500/20 border-red-500/30'
+                            : 'bg-gray-900/50 border-gray-700 hover:bg-gray-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-red-400 font-medium">#{index + 1}</span>
+                            <span className="text-white text-xs">{user.phone_number}</span>
+                          </div>
+                          <span className="text-[10px] text-gray-500">{user.created_at ? new Date(user.created_at).toLocaleDateString() : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4 text-xs">No concern members found</p>
+                )}
+              </div>
 
-            {/* Additional Metrics Row */}
-            <div className="grid grid-cols-3 gap-2 col-span-3">
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-                <span className="text-gray-400 text-sm mb-0.5">Avg Rating</span>
-                <p className="text-xl font-bold text-white">
-                  {generic.average_gym_rating !== null && generic.average_gym_rating !== undefined
-                    ? `${generic.average_gym_rating}/10`
-                    : 'N/A'}
-                </p>
-              </div>
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-                <span className="text-gray-400 text-sm mb-0.5">Placeholder Metric</span>
-                <p className="text-xl font-bold text-white">NA</p>
-              </div>
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
-                <span className="text-gray-400 text-sm mb-0.5">Placeholder Metric</span>
-                <p className="text-xl font-bold text-white">NA</p>
-              </div>
+              {selectedConcernCall && (
+                <div className="border-t border-gray-700 p-2 bg-gray-900/30">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-white">Call: {selectedConcernCall.phoneNumber}</h4>
+                    <button
+                      onClick={() => setSelectedConcernCall(null)}
+                      className="text-xs text-gray-400 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div
+                    onClick={() => {
+                      if (selectedConcernCall?.call?.call_id) {
+                        openFilterModal('call_id', selectedConcernCall.call.call_id, `Call: ${selectedConcernCall.phoneNumber}`, selectedConcernCall.call.call_id);
+                      }
+                    }}
+                    className="bg-gray-800/50 border border-red-500/30 rounded-lg p-2 cursor-pointer hover:bg-gray-800 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-300">{selectedConcernCall.call.call_id}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -694,7 +862,7 @@ export default function Dashboard({ setCurrentPage }) {
                   </div>
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm">Top Revenue Levers</span>
+                      <span className="font-bold text-white text-sm">Top Revenue Users</span>
                       {revenueUsers && revenueUsers.phone_numbers && revenueUsers.phone_numbers.length > 0 && (
                         <span className="px-2 py-0.5 bg-primary-500/20 text-primary-400 rounded-full text-xs font-semibold">
                           {revenueUsers.phone_numbers.length}
@@ -853,7 +1021,7 @@ export default function Dashboard({ setCurrentPage }) {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <span>💰</span>
-              Top Revenue Opportunity
+              Top Revenue Levers
             </h3>
             {revenue.top_opportunities && revenue.top_opportunities.length > 0 ? (
               <div className="space-y-2">
