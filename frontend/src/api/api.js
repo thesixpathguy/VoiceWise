@@ -168,11 +168,31 @@ export const callsAPI = {
   },
   
   // Get pain point user segments
-  getPainPointUsers: async (gymId = null, painPoint = null, limit = 100) => {
-    const params = {};
+  getPainPointUsers: async (...args) => {
+    let gymId = null;
+    let painPoint = null;
+    let limit = 100;
+    let startDate = null;
+    let endDate = null;
+
+    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+      ({
+        gymId = null,
+        painPoint = null,
+        limit = 100,
+        startDate = null,
+        endDate = null
+      } = args[0]);
+    } else {
+      [gymId = null, painPoint = null, limit = 100, startDate = null, endDate = null] = args;
+    }
+
+    const params = { limit };
     if (gymId) params.gym_id = gymId;
     if (painPoint) params.pain_point = painPoint;
-    params.limit = limit;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+
     const response = await api.get('/api/calls/user-segments/pain-points', { params });
     return response.data;
   },

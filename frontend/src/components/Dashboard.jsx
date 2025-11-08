@@ -13,7 +13,9 @@ export default function Dashboard({ setCurrentPage }) {
     type: null,
     value: null,
     label: '',
-    callId: null
+    callId: null,
+    startDate: null,
+    endDate: null
   });
   const [churnUsers, setChurnUsers] = useState(null);
   const [revenueUsers, setRevenueUsers] = useState(null);
@@ -106,7 +108,16 @@ export default function Dashboard({ setCurrentPage }) {
     const fetchConcerns = async () => {
       try {
         setConcernLoading(true);
-        const data = await callsAPI.getPainPointUsers(null, null, 100);
+        const toApiDate = (value) => (value ? value.replace(/\//g, '-') : value);
+        const startDate = toApiDate(dateRange.startDate);
+        const endDate = toApiDate(dateRange.endDate);
+        const data = await callsAPI.getPainPointUsers({
+          gymId: null,
+          painPoint: null,
+          limit: 100,
+          startDate,
+          endDate
+        });
         if (!isMounted) return;
 
         const payload = {
@@ -134,7 +145,7 @@ export default function Dashboard({ setCurrentPage }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [dateRange.startDate, dateRange.endDate]);
 
   // Handle date range change
   const handleDateRangeChange = (newStartDate, newEndDate) => {
@@ -186,11 +197,38 @@ export default function Dashboard({ setCurrentPage }) {
   }
 
   const openFilterModal = (type, value, label, callId = null) => {
-    setFilterModal({ isOpen: true, type, value, label, callId });
+    const defaultStart = formatDateForAPI(dateRange.startDate);
+    const defaultEnd = formatDateForAPI(dateRange.endDate);
+    let modalStart = defaultStart;
+    let modalEnd = defaultEnd;
+
+    if (type === 'date_range' && typeof value === 'string') {
+      const [rangeStart, rangeEnd] = value.split('|');
+      if (rangeStart) modalStart = rangeStart;
+      if (rangeEnd) modalEnd = rangeEnd;
+    }
+
+    setFilterModal({
+      isOpen: true,
+      type,
+      value,
+      label,
+      callId,
+      startDate: modalStart,
+      endDate: modalEnd
+    });
   };
 
   const closeFilterModal = () => {
-    setFilterModal({ isOpen: false, type: null, value: null, label: '', callId: null });
+    setFilterModal({
+      isOpen: false,
+      type: null,
+      value: null,
+      label: '',
+      callId: null,
+      startDate: null,
+      endDate: null
+    });
   };
 
   const generic = summary.generic || {};
@@ -1089,6 +1127,8 @@ export default function Dashboard({ setCurrentPage }) {
         filterValue={filterModal.value}
         filterLabel={filterModal.label}
         specificCallId={filterModal.callId}
+        startDate={filterModal.startDate}
+        endDate={filterModal.endDate}
       />
     </div>
   );

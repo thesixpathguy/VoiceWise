@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import { callsAPI } from '../api/api';
 
-export default function FilteredCallsModal({ isOpen, onClose, filterType, filterValue, filterLabel, specificCallId = null }) {
+export default function FilteredCallsModal({
+  isOpen,
+  onClose,
+  filterType,
+  filterValue,
+  filterLabel,
+  specificCallId = null,
+  startDate: modalStartDate = null,
+  endDate: modalEndDate = null
+}) {
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -31,7 +40,7 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
         loadFilteredCalls(1);
       }
     }
-  }, [isOpen, filterType, filterValue, specificCallId]);
+  }, [isOpen, filterType, filterValue, specificCallId, modalStartDate, modalEndDate]);
 
   const loadSpecificCall = async (callId) => {
     try {
@@ -80,6 +89,9 @@ export default function FilteredCallsModal({ isOpen, onClose, filterType, filter
         limit: itemsPerPage,
         skip: skip
       };
+
+      if (modalStartDate) params.start_date = modalStartDate;
+      if (modalEndDate) params.end_date = modalEndDate;
       
       const normalizeDateParam = (value) => {
         if (!value) return undefined;

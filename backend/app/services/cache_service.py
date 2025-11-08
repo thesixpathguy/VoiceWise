@@ -330,6 +330,11 @@ class CacheService:
     def get_chart_calls(
         fetch_func,
         gym_id: Optional[str] = None,
+        status: Optional[str] = None,
+        sentiment: Optional[str] = None,
+        pain_point: Optional[str] = None,
+        opportunity: Optional[str] = None,
+        revenue_interest: Optional[bool] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         churn_min_score: Optional[float] = None,
@@ -372,6 +377,11 @@ class CacheService:
             # Not a chart query, fetch directly without caching
             return fetch_func(
                 gym_id=gym_id,
+                status=status,
+                sentiment=sentiment,
+                pain_point=pain_point,
+                opportunity=opportunity,
+                revenue_interest=revenue_interest,
                 start_date=start_date,
                 end_date=end_date,
                 churn_min_score=churn_min_score,
@@ -389,6 +399,11 @@ class CacheService:
         cache_key = CacheService._generate_cache_key(
             "chart:calls",
             gym_id=gym_id,
+            status=status,
+            sentiment=sentiment,
+            pain_point=pain_point,
+            opportunity=opportunity,
+            revenue_interest=revenue_interest,
             start_date=start_date,
             end_date=end_date,
             churn_min_score=churn_min_score,
@@ -407,6 +422,11 @@ class CacheService:
         # Fetch from DB
         data = fetch_func(
             gym_id=gym_id,
+            status=status,
+            sentiment=sentiment,
+            pain_point=pain_point,
+            opportunity=opportunity,
+            revenue_interest=revenue_interest,
             start_date=start_date,
             end_date=end_date,
             churn_min_score=churn_min_score,
