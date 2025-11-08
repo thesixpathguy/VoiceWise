@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { callsAPI } from '../api/api';
 import FilteredCallsModal from './FilteredCallsModal';
 import TrendCharts from './TrendCharts';
+import CompactDateSelector from './CompactDateSelector';
 
 export default function Dashboard({ setCurrentPage }) {
   const [summary, setSummary] = useState(null);
@@ -16,54 +17,34 @@ export default function Dashboard({ setCurrentPage }) {
   });
   const [churnUsers, setChurnUsers] = useState(null);
   const [revenueUsers, setRevenueUsers] = useState(null);
-  const [activeChurnTab, setActiveChurnTab] = useState(false);
-  const [activeRevenueTab, setActiveRevenueTab] = useState(false);
   const [selectedChurnCall, setSelectedChurnCall] = useState(null);
   const [selectedRevenueCall, setSelectedRevenueCall] = useState(null);
   const [sentimentChartType, setSentimentChartType] = useState('area'); // 'area', 'line', 'stackedBar', 'radar'
   const [churnChartType, setChurnChartType] = useState('avgLine'); // 'avgLine', 'scatter'
   const [revenueChartType, setRevenueChartType] = useState('avgLine'); // 'avgLine', 'scatter'
+  
+  // Date range state
+  const [dateRange, setDateRange] = useState(() => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return {
+      startDate: thirtyDaysAgo.toLocaleDateString('en-GB'), // DD/MM/YYYY format
+      endDate: today.toLocaleDateString('en-GB')
+    };
+  });
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
+  // Helper function to format date for API (DD-MM-YYYY)
+  const formatDateForAPI = (dateStr) => {
+    // Convert DD/MM/YYYY to DD-MM-YYYY
+    return dateStr.replace(/\//g, '-');
+  };
 
-  // Auto-load churn users when summary is available
-  useEffect(() => {
-    if (summary?.churn_interest && !churnUsers) {
-      const loadChurnUsers = async () => {
-        try {
-          const threshold = summary.churn_interest.churn_threshold || 0.8;
-          const data = await callsAPI.getTopChurnUsers(null, threshold, 100);
-          setChurnUsers(data);
-        } catch (err) {
-          console.error('Failed to load churn users:', err);
-        }
-      };
-      loadChurnUsers();
-    }
-  }, [summary, churnUsers]);
-
-  // Auto-load revenue users when summary is available
-  useEffect(() => {
-    if (summary?.revenue_interest && !revenueUsers) {
-      const loadRevenueUsers = async () => {
-        try {
-          const threshold = summary.revenue_interest.revenue_threshold || 0.8;
-          const data = await callsAPI.getTopRevenueUsers(null, threshold, 100);
-          setRevenueUsers(data);
-        } catch (err) {
-          console.error('Failed to load revenue users:', err);
-        }
-      };
-      loadRevenueUsers();
-    }
-  }, [summary, revenueUsers]);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await callsAPI.getDashboardSummary();
+      const startDate = formatDateForAPI(dateRange.startDate);
+      const endDate = formatDateForAPI(dateRange.endDate);
+      const data = await callsAPI.getDashboardSummary(startDate, endDate);
       setSummary(data);
       setError(null);
     } catch (err) {
@@ -72,6 +53,59 @@ export default function Dashboard({ setCurrentPage }) {
     } finally {
       setLoading(false);
     }
+  }, [dateRange]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]); // Reload when date range changes
+
+  // Auto-load churn users when summary is available or date range changes
+  useEffect(() => {
+    if (summary?.churn_interest) {
+      const loadChurnUsers = async () => {
+        try {
+          const threshold = summary.churn_interest.churn_threshold || 0.8;
+          const startDate = formatDateForAPI(dateRange.startDate);
+          const endDate = formatDateForAPI(dateRange.endDate);
+          const data = await callsAPI.getTopChurnUsers(null, startDate, endDate, threshold, 100);
+          setChurnUsers(data);
+        } catch (err) {
+          console.error('Failed to load churn users:', err);
+        }
+      };
+      loadChurnUsers();
+    }
+  }, [summary, dateRange]);
+
+  // Auto-load revenue users when summary is available or date range changes
+  useEffect(() => {
+    if (summary?.revenue_interest) {
+      const loadRevenueUsers = async () => {
+        try {
+          const threshold = summary.revenue_interest.revenue_threshold || 0.8;
+          const startDate = formatDateForAPI(dateRange.startDate);
+          const endDate = formatDateForAPI(dateRange.endDate);
+          const data = await callsAPI.getTopRevenueUsers(null, startDate, endDate, threshold, 100);
+          setRevenueUsers(data);
+        } catch (err) {
+          console.error('Failed to load revenue users:', err);
+        }
+      };
+      loadRevenueUsers();
+    }
+  }, [summary, dateRange]);
+
+  // Handle date range change
+  const handleDateRangeChange = (newStartDate, newEndDate) => {
+    setDateRange({
+      startDate: newStartDate,
+      endDate: newEndDate
+    });
+    // Clear user data to force reload
+    setChurnUsers(null);
+    setRevenueUsers(null);
+    setSelectedChurnCall(null);
+    setSelectedRevenueCall(null);
   };
 
   if (loading) {
@@ -115,6 +149,18 @@ export default function Dashboard({ setCurrentPage }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4">
+      {/* Compact Date Range Selector */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          Business Intelligence Dashboard
+        </div>
+        <CompactDateSelector
+          startDate={dateRange.startDate}
+          endDate={dateRange.endDate}
+          onDateRangeChange={handleDateRangeChange}
+        />
+      </div>
+
       {/* Aesthetic Divider for Business Health Analysis Section */}
       <div className="mb-8 relative">
         <div className="absolute inset-0 flex items-center">
@@ -242,7 +288,8 @@ export default function Dashboard({ setCurrentPage }) {
                 type="sentiment"
                 chartType={sentimentChartType}
                 gymId={null}
-                days={30}
+                startDate={formatDateForAPI(dateRange.startDate)}
+                endDate={formatDateForAPI(dateRange.endDate)}
                 onPointClick={(callId, dateRange, dateStr) => {
                   if (dateRange) {
                     const formattedDate = dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Selected Day';
@@ -404,7 +451,9 @@ export default function Dashboard({ setCurrentPage }) {
                       key={index}
                       onClick={async () => {
                         try {
-                          const call = await callsAPI.getLatestCallByPhone(user.phone_number);
+                          const startDate = formatDateForAPI(dateRange.startDate);
+                          const endDate = formatDateForAPI(dateRange.endDate);
+                          const call = await callsAPI.getLatestCallByPhone(user.phone_number, null, startDate, endDate);
                           if (call && call.call_id) {
                             setSelectedChurnCall({ call, phoneNumber: user.phone_number, score: user.churn_score });
                           } else {
@@ -505,7 +554,8 @@ export default function Dashboard({ setCurrentPage }) {
                 type="churn"
                 chartType={churnChartType}
                 gymId={null}
-                days={30}
+                startDate={formatDateForAPI(dateRange.startDate)}
+                endDate={formatDateForAPI(dateRange.endDate)}
                 threshold={churn.churn_threshold || 0.8}
                 onPointClick={(callId, dateRange, dateStr) => {
                   if (dateRange) {
@@ -678,7 +728,9 @@ export default function Dashboard({ setCurrentPage }) {
                       key={index}
                       onClick={async () => {
                         try {
-                          const call = await callsAPI.getLatestCallByPhone(user.phone_number);
+                          const startDate = formatDateForAPI(dateRange.startDate);
+                          const endDate = formatDateForAPI(dateRange.endDate);
+                          const call = await callsAPI.getLatestCallByPhone(user.phone_number, null, startDate, endDate);
                           if (call && call.call_id) {
                             setSelectedRevenueCall({ call, phoneNumber: user.phone_number, score: user.revenue_interest_score });
                           } else {
@@ -779,7 +831,8 @@ export default function Dashboard({ setCurrentPage }) {
                 type="revenue"
                 chartType={revenueChartType}
                 gymId={null}
-                days={30}
+                startDate={formatDateForAPI(dateRange.startDate)}
+                endDate={formatDateForAPI(dateRange.endDate)}
                 threshold={revenue.revenue_threshold || 0.8}
                 onPointClick={(callId, dateRange, dateStr) => {
                   if (dateRange) {

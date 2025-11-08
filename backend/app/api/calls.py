@@ -59,8 +59,8 @@ async def list_calls(
     revenue_interest: Optional[bool] = Query(None, description="Filter by revenue interest (true/false)"),
     churn_min_score: Optional[float] = Query(None, ge=0.0, le=1.0, description="Filter by minimum churn score (for drill-down)"),
     revenue_min_score: Optional[float] = Query(None, ge=0.0, le=1.0, description="Filter by minimum revenue interest score (for drill-down)"),
-    start_date: Optional[str] = Query(None, description="Filter by start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="Filter by end date (ISO format)"),
+    start_date: Optional[str] = Query(None, description="Filter by start date (DD-MM-YYYY format)"),
+    end_date: Optional[str] = Query(None, description="Filter by end date (DD-MM-YYYY format)"),
     order_by: Optional[str] = Query(None, description="Order results: 'churn_score_desc', 'revenue_score_desc', 'created_at_desc' (default)"),
     limit: int = Query(50, ge=1, le=200, description="Number of calls to return"),
     fields: Optional[str] = Query(None, description="Comma-separated list of fields to return (e.g., 'call_id,phone_number,status'). If not provided, returns all fields."),
@@ -345,6 +345,8 @@ async def analyze_call(call_id: str, db: Session = Depends(get_db)):
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(
+    start_date: str = Query(..., description="Start date in DD-MM-YYYY format"),
+    end_date: str = Query(..., description="End date in DD-MM-YYYY format"),
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
     churn_threshold: float = Query(0.8, ge=0.0, le=1.0, description="Threshold for churn interest filtering (0.0-1.0)"),
     revenue_threshold: float = Query(0.8, ge=0.0, le=1.0, description="Threshold for revenue interest filtering (0.0-1.0)"),
@@ -356,6 +358,8 @@ async def get_dashboard_summary(
     2. Churn interest section: Calls with churn_score > threshold
     3. Revenue interest section: Calls with revenue_interest_score > threshold
     
+    - **start_date**: Required start date filter (DD-MM-YYYY format)
+    - **end_date**: Required end date filter (DD-MM-YYYY format)
     - **gym_id**: Optional gym filter
     - **churn_threshold**: Minimum churn score to include in churn section (default 0.5)
     - **revenue_threshold**: Minimum revenue score to include in revenue section (default 0.5)
@@ -363,6 +367,8 @@ async def get_dashboard_summary(
     insight_service = InsightService(db)
     try:
         summary = insight_service.get_dashboard_summary(
+            start_date=start_date,
+            end_date=end_date,
             gym_id=gym_id,
             churn_threshold=churn_threshold,
             revenue_threshold=revenue_threshold
@@ -434,6 +440,8 @@ async def delete_call(call_id: str, db: Session = Depends(get_db)):
 @router.get("/user-segments/churn")
 async def get_top_churn_users(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    start_date: Optional[str] = Query(None, description="Start date in DD-MM-YYYY format"),
+    end_date: Optional[str] = Query(None, description="End date in DD-MM-YYYY format"),
     threshold: float = Query(0.8, ge=0.0, le=1.0, description="Minimum churn score threshold"),
     limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
     db: Session = Depends(get_db)
@@ -443,13 +451,17 @@ async def get_top_churn_users(
     Returns phone numbers ordered by churn score descending
     
     - **gym_id**: Optional gym filter
-    - **threshold**: Minimum churn score (default 0.7)
+    - **start_date**: Optional start date filter (DD-MM-YYYY format)
+    - **end_date**: Optional end date filter (DD-MM-YYYY format)
+    - **threshold**: Minimum churn score (default 0.8)
     - **limit**: Max results (default 100)
     """
     call_service = CallService(db)
     try:
         results = call_service.get_top_churn_phone_numbers(
             gym_id=gym_id,
+            start_date=start_date,
+            end_date=end_date,
             threshold=threshold,
             limit=limit
         )
@@ -465,6 +477,8 @@ async def get_top_churn_users(
 @router.get("/user-segments/revenue")
 async def get_top_revenue_users(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    start_date: Optional[str] = Query(None, description="Start date in DD-MM-YYYY format"),
+    end_date: Optional[str] = Query(None, description="End date in DD-MM-YYYY format"),
     threshold: float = Query(0.8, ge=0.0, le=1.0, description="Minimum revenue interest score threshold"),
     limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
     db: Session = Depends(get_db)
@@ -474,13 +488,17 @@ async def get_top_revenue_users(
     Returns phone numbers ordered by revenue score descending
     
     - **gym_id**: Optional gym filter
-    - **threshold**: Minimum revenue interest score (default 0.7)
+    - **start_date**: Optional start date filter (DD-MM-YYYY format)
+    - **end_date**: Optional end date filter (DD-MM-YYYY format)
+    - **threshold**: Minimum revenue interest score (default 0.8)
     - **limit**: Max results (default 100)
     """
     call_service = CallService(db)
     try:
         results = call_service.get_top_revenue_phone_numbers(
             gym_id=gym_id,
+            start_date=start_date,
+            end_date=end_date,
             threshold=threshold,
             limit=limit
         )
@@ -630,6 +648,8 @@ async def get_prompt_filtered_users(
 async def get_latest_call_by_phone(
     phone_number: str,
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
+    start_date: Optional[str] = Query(None, description="Start date in DD-MM-YYYY format"),
+    end_date: Optional[str] = Query(None, description="End date in DD-MM-YYYY format"),
     db: Session = Depends(get_db)
 ):
     """
@@ -637,9 +657,11 @@ async def get_latest_call_by_phone(
     
     - **phone_number**: Phone number to search for
     - **gym_id**: Optional gym filter
+    - **start_date**: Optional start date filter (DD-MM-YYYY format)
+    - **end_date**: Optional end date filter (DD-MM-YYYY format)
     """
     call_service = CallService(db)
-    call = call_service.get_latest_call_by_phone_number(phone_number, gym_id)
+    call = call_service.get_latest_call_by_phone_number(phone_number, gym_id, start_date, end_date)
     
     if not call:
         raise HTTPException(status_code=404, detail=f"No calls found for phone number {phone_number}")
@@ -659,13 +681,14 @@ async def get_latest_call_by_phone(
 @router.get("/trends/churn", response_model=TimeSeriesResponse)
 async def get_churn_trend(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
-    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    start_date: str = Query(..., description="Start date in DD-MM-YYYY format"),
+    end_date: str = Query(..., description="End date in DD-MM-YYYY format"),
     period: str = Query("day", description="Period grouping: day, week, month"),
     db: Session = Depends(get_db)
 ):
-    """Get churn score trend data over time"""
+    """Get churn score trend data over time using date range"""
     insight_service = InsightService(db)
-    data = insight_service.get_churn_trend_data(gym_id, days, period)
+    data = insight_service.get_churn_trend_data(gym_id, start_date, end_date, period)
     
     if data and len(data) > 0:
         # Convert dicts to TimeSeriesDataPoint objects
@@ -688,13 +711,14 @@ async def get_churn_trend(
 @router.get("/trends/revenue", response_model=TimeSeriesResponse)
 async def get_revenue_trend(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
-    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    start_date: str = Query(..., description="Start date in DD-MM-YYYY format"),
+    end_date: str = Query(..., description="End date in DD-MM-YYYY format"),
     period: str = Query("day", description="Period grouping: day, week, month"),
     db: Session = Depends(get_db)
 ):
-    """Get revenue interest score trend data over time"""
+    """Get revenue interest score trend data over time using date range"""
     insight_service = InsightService(db)
-    data = insight_service.get_revenue_trend_data(gym_id, days, period)
+    data = insight_service.get_revenue_trend_data(gym_id, start_date, end_date, period)
     
     if data and len(data) > 0:
         # Convert dicts to TimeSeriesDataPoint objects
@@ -717,11 +741,12 @@ async def get_revenue_trend(
 @router.get("/trends/sentiment")
 async def get_sentiment_trend(
     gym_id: Optional[str] = Query(None, description="Filter by gym ID"),
-    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    start_date: str = Query(..., description="Start date in DD-MM-YYYY format"),
+    end_date: str = Query(..., description="End date in DD-MM-YYYY format"),
     period: str = Query("day", description="Period grouping: day, week, month"),
     db: Session = Depends(get_db)
 ):
-    """Get sentiment distribution trend data over time"""
+    """Get sentiment distribution trend data over time using date range"""
     insight_service = InsightService(db)
-    result = insight_service.get_sentiment_trend_data(gym_id, days, period)
+    result = insight_service.get_sentiment_trend_data(gym_id, start_date, end_date, period)
     return result

@@ -236,15 +236,18 @@ class CallService:
         # Apply date range filters
         if start_date:
             try:
-                start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                start_dt = datetime.strptime(start_date, "%d-%m-%Y")
                 query = query.filter(Call.created_at >= start_dt)
             except (ValueError, AttributeError):
                 pass  # Invalid date format, skip filter
         
         if end_date:
             try:
-                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                query = query.filter(Call.created_at <= end_dt)
+                end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+                # Add 23:59:59 to end_date to include the entire day
+                from datetime import timedelta
+                end_dt_with_time = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+                query = query.filter(Call.created_at <= end_dt_with_time)
             except (ValueError, AttributeError):
                 pass  # Invalid date format, skip filter
         
@@ -330,14 +333,15 @@ class CallService:
                 count_query = count_query.filter(Call.gym_id == gym_id)
             if start_date:
                 try:
-                    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    start_dt = datetime.strptime(start_date, "%d-%m-%Y")
                     count_query = count_query.filter(Call.created_at >= start_dt)
                 except (ValueError, AttributeError):
                     pass
             if end_date:
                 try:
-                    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                    count_query = count_query.filter(Call.created_at <= end_dt)
+                    end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+                    end_dt_with_time = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+                    count_query = count_query.filter(Call.created_at <= end_dt_with_time)
                 except (ValueError, AttributeError):
                     pass
             if needs_join:
@@ -363,14 +367,15 @@ class CallService:
                 total_count_query = total_count_query.filter(Call.gym_id == gym_id)
             if start_date:
                 try:
-                    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    start_dt = datetime.strptime(start_date, "%d-%m-%Y")
                     total_count_query = total_count_query.filter(Call.created_at >= start_dt)
                 except (ValueError, AttributeError):
                     pass
             if end_date:
                 try:
-                    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                    total_count_query = total_count_query.filter(Call.created_at <= end_dt)
+                    end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+                    end_dt_with_time = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+                    total_count_query = total_count_query.filter(Call.created_at <= end_dt_with_time)
                 except (ValueError, AttributeError):
                     pass
             if needs_join:
@@ -478,6 +483,8 @@ class CallService:
     def get_top_churn_phone_numbers(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         threshold: float = 0.7,
         limit: int = 100
     ) -> List[dict]:
@@ -487,6 +494,8 @@ class CallService:
         
         Args:
             gym_id: Filter by gym ID
+            start_date: Optional start date filter (DD-MM-YYYY format)
+            end_date: Optional end date filter (DD-MM-YYYY format)
             threshold: Minimum churn score (default 0.7)
             limit: Maximum number of results
         
@@ -495,16 +504,35 @@ class CallService:
         """
         from app.models.models import Insight
         from sqlalchemy import desc, func
+        from datetime import datetime, timedelta
         
-        # Subquery to get latest call per phone number
-        latest_calls_subquery = (
-            self.db.query(
-                Call.phone_number,
-                func.max(Call.created_at).label('latest_created_at')
-            )
-            .group_by(Call.phone_number)
-            .subquery()
+        # Parse date filters
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%d-%m-%Y")
+            except (ValueError, AttributeError):
+                pass
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+                end_dt = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+            except (ValueError, AttributeError):
+                pass
+        
+        # Subquery to get latest call per phone number with date filtering
+        latest_calls_query = self.db.query(
+            Call.phone_number,
+            func.max(Call.created_at).label('latest_created_at')
         )
+        
+        if start_dt:
+            latest_calls_query = latest_calls_query.filter(Call.created_at >= start_dt)
+        if end_dt:
+            latest_calls_query = latest_calls_query.filter(Call.created_at <= end_dt)
+        
+        latest_calls_subquery = latest_calls_query.group_by(Call.phone_number).subquery()
         
         # Main query: Join calls with insights, filter by threshold, get latest per phone
         query = (
@@ -543,6 +571,8 @@ class CallService:
     def get_top_revenue_phone_numbers(
         self,
         gym_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         threshold: float = 0.7,
         limit: int = 100
     ) -> List[dict]:
@@ -552,6 +582,8 @@ class CallService:
         
         Args:
             gym_id: Filter by gym ID
+            start_date: Optional start date filter (DD-MM-YYYY format)
+            end_date: Optional end date filter (DD-MM-YYYY format)
             threshold: Minimum revenue interest score (default 0.7)
             limit: Maximum number of results
         
@@ -560,16 +592,35 @@ class CallService:
         """
         from app.models.models import Insight
         from sqlalchemy import desc, func
+        from datetime import datetime, timedelta
         
-        # Subquery to get latest call per phone number
-        latest_calls_subquery = (
-            self.db.query(
-                Call.phone_number,
-                func.max(Call.created_at).label('latest_created_at')
-            )
-            .group_by(Call.phone_number)
-            .subquery()
+        # Parse date filters
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%d-%m-%Y")
+            except (ValueError, AttributeError):
+                pass
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+                end_dt = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+            except (ValueError, AttributeError):
+                pass
+        
+        # Subquery to get latest call per phone number with date filtering
+        latest_calls_query = self.db.query(
+            Call.phone_number,
+            func.max(Call.created_at).label('latest_created_at')
         )
+        
+        if start_dt:
+            latest_calls_query = latest_calls_query.filter(Call.created_at >= start_dt)
+        if end_dt:
+            latest_calls_query = latest_calls_query.filter(Call.created_at <= end_dt)
+        
+        latest_calls_subquery = latest_calls_query.group_by(Call.phone_number).subquery()
         
         # Main query: Join calls with insights, filter by threshold, get latest per phone
         query = (
@@ -736,7 +787,9 @@ class CallService:
     def get_latest_call_by_phone_number(
         self,
         phone_number: str,
-        gym_id: Optional[str] = None
+        gym_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> Optional[Call]:
         """
         Get the latest call for a specific phone number
@@ -744,14 +797,34 @@ class CallService:
         Args:
             phone_number: Phone number to search for
             gym_id: Optional gym ID filter
+            start_date: Optional start date filter (DD-MM-YYYY format)
+            end_date: Optional end date filter (DD-MM-YYYY format)
         
         Returns:
             Latest Call object or None
         """
+        from datetime import datetime, timedelta
+        
         query = self.db.query(Call).filter(Call.phone_number == phone_number)
         
         if gym_id:
             query = query.filter(Call.gym_id == gym_id)
+        
+        # Apply date range filters
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%d-%m-%Y")
+                query = query.filter(Call.created_at >= start_dt)
+            except (ValueError, AttributeError):
+                pass
+        
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%d-%m-%Y")
+                end_dt_with_time = end_dt + timedelta(hours=23, minutes=59, seconds=59)
+                query = query.filter(Call.created_at <= end_dt_with_time)
+            except (ValueError, AttributeError):
+                pass
         
         return query.order_by(Call.created_at.desc()).first()
     

@@ -104,8 +104,9 @@ export const callsAPI = {
   },
 
   // Get dashboard summary
-  getDashboardSummary: async (gymId = null) => {
-    const params = gymId ? { gym_id: gymId } : {};
+  getDashboardSummary: async (startDate, endDate, gymId = null) => {
+    const params = { start_date: startDate, end_date: endDate };
+    if (gymId) params.gym_id = gymId;
     const response = await api.get('/api/calls/dashboard/summary', { params });
     return response.data;
   },
@@ -118,9 +119,11 @@ export const callsAPI = {
   },
   
   // Get top churn user segments
-  getTopChurnUsers: async (gymId = null, threshold = 0.8, limit = 100) => {
+  getTopChurnUsers: async (gymId = null, startDate = null, endDate = null, threshold = 0.8, limit = 100) => {
     const params = {};
     if (gymId) params.gym_id = gymId;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
     params.threshold = threshold;
     params.limit = limit;
     const response = await api.get('/api/calls/user-segments/churn', { params });
@@ -128,9 +131,11 @@ export const callsAPI = {
   },
   
   // Get top revenue user segments
-  getTopRevenueUsers: async (gymId = null, threshold = 0.8, limit = 100) => {
+  getTopRevenueUsers: async (gymId = null, startDate = null, endDate = null, threshold = 0.8, limit = 100) => {
     const params = {};
     if (gymId) params.gym_id = gymId;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
     params.threshold = threshold;
     params.limit = limit;
     const response = await api.get('/api/calls/user-segments/revenue', { params });
@@ -158,30 +163,32 @@ export const callsAPI = {
   },
   
   // Get latest call by phone number
-  getLatestCallByPhone: async (phoneNumber, gymId = null) => {
+  getLatestCallByPhone: async (phoneNumber, gymId = null, startDate = null, endDate = null) => {
     const params = {};
     if (gymId) params.gym_id = gymId;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
     const response = await api.get(`/api/calls/phone/${phoneNumber}/latest`, { params });
     return response.data;
   },
 
   // Trend data endpoints
-  getChurnTrend: async (gymId = null, days = 30, period = 'day') => {
-    const params = { days, period };
+  getChurnTrend: async (gymId = null, startDate, endDate, period = 'day') => {
+    const params = { start_date: startDate, end_date: endDate, period };
     if (gymId) params.gym_id = gymId;
     const response = await api.get('/api/calls/trends/churn', { params });
     return response.data;
   },
 
-  getRevenueTrend: async (gymId = null, days = 30, period = 'day') => {
-    const params = { days, period };
+  getRevenueTrend: async (gymId = null, startDate, endDate, period = 'day') => {
+    const params = { start_date: startDate, end_date: endDate, period };
     if (gymId) params.gym_id = gymId;
     const response = await api.get('/api/calls/trends/revenue', { params });
     return response.data;
   },
 
-  getSentimentTrend: async (gymId = null, days = 30, period = 'day') => {
-    const params = { days, period };
+  getSentimentTrend: async (gymId = null, startDate, endDate, period = 'day') => {
+    const params = { start_date: startDate, end_date: endDate, period };
     if (gymId) params.gym_id = gymId;
     const response = await api.get('/api/calls/trends/sentiment', { params });
     return response.data;
