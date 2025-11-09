@@ -261,7 +261,17 @@ async def get_call(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail=f"Call {call_id} not found")
     
-    return call
+    return CallDetail(
+        call_id=call.call_id,
+        phone_number=call.phone_number,
+        status=call.status,
+        duration_seconds=call.duration_seconds,
+        created_at=call.created_at,
+        raw_transcript=call.raw_transcript,
+        custom_instructions=call.custom_instructions,
+        answered_by=getattr(call.answered_by, "value", call.answered_by),
+        api_key_index=call.api_key_index
+    )
 
 
 @router.get("/{call_id}/insights", response_model=InsightResponse)
@@ -683,7 +693,9 @@ async def get_latest_call_by_phone(
         duration_seconds=call.duration_seconds,
         created_at=call.created_at,
         raw_transcript=call.raw_transcript,
-        custom_instructions=call.custom_instructions
+        custom_instructions=call.custom_instructions,
+        answered_by=getattr(call.answered_by, "value", call.answered_by),
+        api_key_index=call.api_key_index
     )
 
 
