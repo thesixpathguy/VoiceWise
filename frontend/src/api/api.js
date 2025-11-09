@@ -104,8 +104,20 @@ export const callsAPI = {
   },
 
   // Get dashboard summary
-  getDashboardSummary: async (gymId = null) => {
-    const params = gymId ? { gym_id: gymId } : {};
+  getDashboardSummary: async ({ startDate, endDate, gymId = null, churnThreshold = 0.8, revenueThreshold = 0.8 } = {}) => {
+    if (!startDate || !endDate) {
+      throw new Error('getDashboardSummary requires startDate and endDate (DD-MM-YYYY).');
+    }
+
+    const params = {
+      start_date: startDate,
+      end_date: endDate,
+      churn_threshold: churnThreshold,
+      revenue_threshold: revenueThreshold
+    };
+
+    if (gymId) params.gym_id = gymId;
+
     const response = await api.get('/api/calls/dashboard/summary', { params });
     return response.data;
   },
@@ -118,50 +130,110 @@ export const callsAPI = {
   },
   
   // Get top churn user segments
-  getTopChurnUsers: async (gymId = null, threshold = 0.8, limit = 100) => {
-    const params = {};
+  getTopChurnUsers: async ({ gymId = null, startDate, endDate, threshold = 0.8, limit = 100 } = {}) => {
+    if (!startDate || !endDate) {
+      throw new Error('getTopChurnUsers requires startDate and endDate.');
+    }
+
+    const params = {
+      threshold,
+      limit
+    };
+
     if (gymId) params.gym_id = gymId;
-    params.threshold = threshold;
-    params.limit = limit;
+    params.start_date = startDate;
+    params.end_date = endDate;
+
     const response = await api.get('/api/calls/user-segments/churn', { params });
     return response.data;
   },
   
   // Get top revenue user segments
-  getTopRevenueUsers: async (gymId = null, threshold = 0.8, limit = 100) => {
-    const params = {};
+  getTopRevenueUsers: async ({ gymId = null, startDate, endDate, threshold = 0.8, limit = 100 } = {}) => {
+    if (!startDate || !endDate) {
+      throw new Error('getTopRevenueUsers requires startDate and endDate.');
+    }
+
+    const params = {
+      threshold,
+      limit
+    };
+
     if (gymId) params.gym_id = gymId;
-    params.threshold = threshold;
-    params.limit = limit;
+    params.start_date = startDate;
+    params.end_date = endDate;
+
     const response = await api.get('/api/calls/user-segments/revenue', { params });
     return response.data;
   },
   
-  // Get latest call by phone number
-  getLatestCallByPhone: async (phoneNumber, gymId = null) => {
+  // Get pain point user segments
+  getPainPointUsers: async (...args) => {
+    let gymId = null;
+    let painPoint = null;
+    let limit = 100;
+    let startDate = null;
+    let endDate = null;
+
+    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+      ({
+        gymId = null,
+        painPoint = null,
+        limit = 100,
+        startDate = null,
+        endDate = null
+      } = args[0]);
+    } else {
+      [gymId = null, painPoint = null, limit = 100, startDate = null, endDate = null] = args;
+    }
+
+    const params = { limit };
+    if (gymId) params.gym_id = gymId;
+    if (painPoint) params.pain_point = painPoint;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+
+    const response = await api.get('/api/calls/user-segments/pain-points', { params });
+    return response.data;
+  },
+  
+  // Get prompt filtered user segments (AI search)
+  getPromptFilteredUsers: async (gymId = null, prompt = '', limit = 100) => {
     const params = {};
     if (gymId) params.gym_id = gymId;
+    params.prompt = prompt;
+    params.limit = limit;
+    const response = await api.get('/api/calls/user-segments/prompt', { params });
+    return response.data;
+  },
+  
+  // Get latest call by phone number
+  getLatestCallByPhone: async (phoneNumber, gymId = null, startDate = null, endDate = null) => {
+    const params = {};
+    if (gymId) params.gym_id = gymId;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
     const response = await api.get(`/api/calls/phone/${phoneNumber}/latest`, { params });
     return response.data;
   },
 
   // Trend data endpoints
-  getChurnTrend: async (gymId = null, days = 30, period = 'day') => {
-    const params = { days, period };
+  getChurnTrend: async (gymId = null, startDate, endDate, period = 'day') => {
+    const params = { start_date: startDate, end_date: endDate, period };
     if (gymId) params.gym_id = gymId;
     const response = await api.get('/api/calls/trends/churn', { params });
     return response.data;
   },
 
-  getRevenueTrend: async (gymId = null, days = 30, period = 'day') => {
-    const params = { days, period };
+  getRevenueTrend: async (gymId = null, startDate, endDate, period = 'day') => {
+    const params = { start_date: startDate, end_date: endDate, period };
     if (gymId) params.gym_id = gymId;
     const response = await api.get('/api/calls/trends/revenue', { params });
     return response.data;
   },
 
-  getSentimentTrend: async (gymId = null, days = 30, period = 'day') => {
-    const params = { days, period };
+  getSentimentTrend: async (gymId = null, startDate, endDate, period = 'day') => {
+    const params = { start_date: startDate, end_date: endDate, period };
     if (gymId) params.gym_id = gymId;
     const response = await api.get('/api/calls/trends/sentiment', { params });
     return response.data;

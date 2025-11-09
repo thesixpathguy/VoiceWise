@@ -15,17 +15,22 @@ def get_database_url_with_ssl(database_url: str) -> str:
         return database_url
     
     parsed = urlparse(database_url)
+    
+    # Check if it's a local connection (using hostname, not substring match)
+    # Include Docker service names (db, postgres) and local addresses
+    local_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "db", "postgres"}
+    is_local = parsed.hostname in local_hosts
+    
+    # Local connections don't need SSL modifications
+    if is_local:
+        return database_url
+    
+    # Remote connections (e.g., Supabase) require SSL
     query_params = parse_qs(parsed.query)
     
-    # Determine SSL mode based on environment
-    # Local development: localhost or 127.0.0.1 = disable SSL
-    # Production (Supabase): require SSL
-    is_local = parsed.hostname in ('localhost', '127.0.0.1')
-    default_sslmode = 'disable' if is_local else 'require'
-    
-    # Add SSL mode if not present
+    # Add SSL mode if not present (require for remote connections)
     if 'sslmode' not in query_params:
-        query_params['sslmode'] = [default_sslmode]
+        query_params['sslmode'] = ['require']
     
     # Rebuild URL with SSL parameters
     new_query = urlencode(query_params, doseq=True)
@@ -35,21 +40,12 @@ def get_database_url_with_ssl(database_url: str) -> str:
 # Create database engine with SSL support
 database_url = get_database_url_with_ssl(settings.DATABASE_URL)
 
-# Create engine with SSL connection args for PostgreSQL
-connect_args = {}
-if "postgresql" in database_url or "postgres" in database_url:
-    # Determine SSL mode: local development disables SSL, production requires it
-    is_local = "localhost" in database_url or "127.0.0.1" in database_url
-    sslmode = "disable" if is_local else "require"
-    connect_args = {
-        "sslmode": sslmode
-    }
-
+# Create engine
+# SSL mode is already configured in the URL by get_database_url_with_ssl()
 engine = create_engine(
     database_url,
     pool_pre_ping=True,  # Verify connections before using
-    echo=settings.DEBUG,  # Log SQL queries in debug mode
-    connect_args=connect_args
+    echo=settings.DEBUG  # Log SQL queries in debug mode
 )
 
 # Create session factory

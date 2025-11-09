@@ -208,33 +208,3 @@ backend/
 │   └── services/
 │       └── call_service.py           (MODIFIED)
 ```
-
-## Performance Considerations
-
-- Audio is decoded and played in real-time with minimal latency
-- Audio queue prevents stuttering with small buffer
-- Resampling happens on-demand only if sample rates don't match
-- WebSocket binary data reduces overhead vs text-based transmission
-
-## Future Enhancements
-
-- [ ] Move Bland AI API key to backend (security)
-- [ ] Add volume control slider
-- [ ] Add pause/resume (without closing connection)
-- [ ] Add audio download/export capability
-- [ ] Add multiple simultaneous call playback support
-- [ ] Add audio visualization (waveform display)
-- [ ] Add call recording storage and playback from database
-
-## Testing Checklist
-
-- [ ] Play button appears in live call modal
-- [ ] Clicking play initiates audio streaming
-- [ ] Audio plays through browser speakers
-- [ ] Stop button appears during playback
-- [ ] Clicking stop closes connection cleanly
-- [ ] Audio status updates correctly
-- [ ] Errors display appropriately
-- [ ] Closing modal stops audio playback
-- [ ] No browser console errors
-- [ ] Works on Chrome, Firefox, Safari (test as needed)

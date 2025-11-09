@@ -60,31 +60,38 @@ class CacheService:
         cache_type: str,  # 'churn', 'revenue', 'sentiment'
         fetch_func,
         gym_id: Optional[str] = None,
-        days: int = 30,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         period: str = "day",
         **kwargs
     ) -> List[Dict]:
         """
-        Get trend data with caching strategy:
+        Get trend data with caching strategy using date ranges:
         - Cache data up to end of yesterday
         - Fetch today's data fresh from DB
         - Merge cached historical data with fresh today's data
         
         Args:
             cache_type: Type of trend ('churn', 'revenue', 'sentiment')
-            fetch_func: Function to fetch data from DB (should accept days, gym_id, period, etc.)
+            fetch_func: Function to fetch data from DB (should accept start_date, end_date, gym_id, period, etc.)
             gym_id: Optional gym ID filter
-            days: Number of days to fetch
+            start_date: Start date for data range
+            end_date: End date for data range
             period: Period type ('day', 'week', 'month' - for future support)
             **kwargs: Additional parameters to pass to fetch_func
         
         Returns:
             List of trend data points
         """
+        # Convert datetime to string for cache key generation
+        start_str = start_date.isoformat() if start_date else None
+        end_str = end_date.isoformat() if end_date else None
+        
         cache_key = CacheService._generate_cache_key(
             f"trend:{cache_type}",
             gym_id=gym_id,
-            days=days,
+            start_date=start_str,
+            end_date=end_str,
             period=period,
             **kwargs
         )
@@ -98,7 +105,7 @@ class CacheService:
         
         # Cache miss - fetch from database
         # For now, fetch all data (we'll optimize to fetch only today later)
-        data = fetch_func(gym_id=gym_id, days=days, period=period, **kwargs)
+        data = fetch_func(gym_id=gym_id, start_date=start_date, end_date=end_date, period=period, **kwargs)
         
         # Cache the data
         CacheService._trend_cache[cache_key] = data
@@ -323,11 +330,17 @@ class CacheService:
     def get_chart_calls(
         fetch_func,
         gym_id: Optional[str] = None,
+        status: Optional[str] = None,
+        sentiment: Optional[str] = None,
+        pain_point: Optional[str] = None,
+        opportunity: Optional[str] = None,
+        revenue_interest: Optional[bool] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         churn_min_score: Optional[float] = None,
         revenue_min_score: Optional[float] = None,
         order_by: Optional[str] = None,
+        fields: Optional[List[str]] = None,
         limit: int = 100,
         **kwargs
     ):
@@ -346,6 +359,7 @@ class CacheService:
             churn_min_score: Minimum churn score filter
             revenue_min_score: Minimum revenue score filter
             order_by: Order by parameter
+            fields: List of fields to return (field projection)
             limit: Limit (should be <= 200 for chart queries)
             **kwargs: Additional parameters
         
@@ -363,24 +377,39 @@ class CacheService:
             # Not a chart query, fetch directly without caching
             return fetch_func(
                 gym_id=gym_id,
+                status=status,
+                sentiment=sentiment,
+                pain_point=pain_point,
+                opportunity=opportunity,
+                revenue_interest=revenue_interest,
                 start_date=start_date,
                 end_date=end_date,
                 churn_min_score=churn_min_score,
                 revenue_min_score=revenue_min_score,
                 order_by=order_by,
+                fields=fields,
                 limit=limit,
                 **kwargs
             )
         
         # Generate cache key for chart queries
+        # Convert fields list to string for cache key generation
+        fields_str = ','.join(sorted(fields)) if fields else None
+        
         cache_key = CacheService._generate_cache_key(
             "chart:calls",
             gym_id=gym_id,
+            status=status,
+            sentiment=sentiment,
+            pain_point=pain_point,
+            opportunity=opportunity,
+            revenue_interest=revenue_interest,
             start_date=start_date,
             end_date=end_date,
             churn_min_score=churn_min_score,
             revenue_min_score=revenue_min_score,
             order_by=order_by,
+            fields=fields_str,
             limit=limit,
             **kwargs
         )
@@ -393,11 +422,17 @@ class CacheService:
         # Fetch from DB
         data = fetch_func(
             gym_id=gym_id,
+            status=status,
+            sentiment=sentiment,
+            pain_point=pain_point,
+            opportunity=opportunity,
+            revenue_interest=revenue_interest,
             start_date=start_date,
             end_date=end_date,
             churn_min_score=churn_min_score,
             revenue_min_score=revenue_min_score,
             order_by=order_by,
+            fields=fields,
             limit=limit,
             **kwargs
         )

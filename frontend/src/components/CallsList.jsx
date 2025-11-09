@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { callsAPI } from '../api/api';
 
 export default function CallsList() {
@@ -13,11 +13,21 @@ export default function CallsList() {
   const [pickupStats, setPickupStats] = useState(null);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    loadCalls(currentPage);
-    loadSummary();
-    loadPickupStats();
-  }, [currentPage]);
+  const defaultDateRange = useMemo(() => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const formatForAPI = (date) => {
+      const dd = String(date.getDate()).padStart(2, '0');
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const yyyy = date.getFullYear();
+      return `${dd}-${mm}-${yyyy}`;
+    };
+
+    return {
+      startDate: formatForAPI(thirtyDaysAgo),
+      endDate: formatForAPI(today)
+    };
+  }, []);
 
   const loadPickupStats = async () => {
     try {
@@ -31,7 +41,20 @@ export default function CallsList() {
 
   const loadSummary = async () => {
     try {
-      const data = await callsAPI.getDashboardSummary();
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const formatForAPI = (date) => {
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+      };
+
+      const data = await callsAPI.getDashboardSummary({
+        startDate: formatForAPI(thirtyDaysAgo),
+        endDate: formatForAPI(today)
+      });
       console.log('Dashboard summary data:', data);
       console.log('Generic data:', data.generic);
       setGeneric(data.generic || {});
@@ -40,16 +63,24 @@ export default function CallsList() {
     }
   };
 
-  const loadCalls = async (page = 1) => {
+  const loadCalls = async (page = 1, extraParams = {}) => {
     try {
       setLoading(true);
       // Ensure page is a valid number, default to 1 if invalid
       const pageNum = Number(page) || 1;
       const skip = Math.max(0, (pageNum - 1) * itemsPerPage);
-      const response = await callsAPI.listCalls({ 
+      const params = { 
         limit: itemsPerPage, 
-        skip: skip 
-      });
+        skip: skip,
+        ...extraParams
+      };
+
+      if (!params.start_date || !params.end_date) {
+        params.start_date = defaultDateRange.startDate;
+        params.end_date = defaultDateRange.endDate;
+      }
+
+      const response = await callsAPI.listCalls(params);
       
       // Handle both old format (array) and new format (object with calls and total)
       const calls = Array.isArray(response) ? response : (response.calls || []);
@@ -108,12 +139,21 @@ export default function CallsList() {
   const totalPages = Math.ceil(totalCalls / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
 
-  const handlePageChange = (page) => {
+  const [currentFilters, setCurrentFilters] = useState({});
+
+  const handlePageChange = (page, filters = currentFilters) => {
     setCurrentPage(page);
+    setCurrentFilters(filters);
     setSelectedCall(null); // Clear selection when changing pages
     setInsights(null);
-    loadCalls(page); // Load the new page from server
+    loadCalls(page, filters); // Load the new page from server
   };
+
+  useEffect(() => {
+    loadCalls(currentPage, currentFilters);
+    loadSummary();
+    loadPickupStats();
+  }, [currentPage, currentFilters, defaultDateRange]);
 
   const handleAnalyze = async (callId) => {
     try {
@@ -131,7 +171,7 @@ export default function CallsList() {
   const handleRefresh = () => {
     // Reset to page 1 and reload
     setCurrentPage(1);
-    loadCalls(1);
+    loadCalls(1, currentFilters);
     loadSummary();
     loadPickupStats();
   };
@@ -149,6 +189,7 @@ export default function CallsList() {
     }
   };
 
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -162,82 +203,77 @@ export default function CallsList() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold text-white">Calls</h1>
-        <button
-          onClick={handleRefresh}
-          title="Refresh metrics and calls"
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-          aria-label="Refresh metrics and calls"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M20 12a8 8 0 10-2.1 5.1L20 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M20 4v6h-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span className="text-sm font-medium">Refresh</span>
-        </button>
-      </div>
+      {/* Metrics Deck */}
+      <div className="mb-8">
+        <div className="relative flex justify-center mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+          </div>
+          <div className="relative flex items-center gap-3 rounded-full border border-gray-700 bg-gray-900 px-5 py-2.5 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-primary-500 animate-pulse"></div>
+              <span className="text-base text-gray-400 font-medium">Feedback Metrics</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-primary-500 animate-pulse"></div>
+          </div>
+          <button
+            onClick={handleRefresh}
+            title="Refresh metrics and calls"
+            aria-label="Refresh metrics and calls"
+              className="ml-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/80 border-2 border-primary-400 text-white hover:bg-primary-500 hover:border-primary-300 transition-all shadow-lg shadow-primary-500/30 text-lg font-bold"
+            >
+              <span className="leading-none">↻</span>
+          </button>
+          </div>
+        </div>
 
-      {/* General Metrics Grid */}
-      <div className="mb-8 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">📊 Call Metrics</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {/* Avg Confidence */}
-          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
-            <p className="text-gray-400 text-sm mb-2">Avg Confidence</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">
+        {/* Stats Grid - Matching Dashboard Style */}
+        <div className="grid grid-cols-3 gap-2 lg:grid-cols-5">
+          {/* Avg Confidence - Primary */}
+          <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-2 cursor-pointer hover:bg-primary-500/20 transition-all flex flex-col items-center justify-center">
+            <span className="text-gray-400 text-sm mb-0.5">Avg Confidence</span>
+            <p className="text-xl font-bold text-primary-400">
                 {generic.average_confidence !== null && generic.average_confidence !== undefined
-                  ? generic.average_confidence.toFixed(2)
+                  ? `${(generic.average_confidence * 100).toFixed(0)}%`
                   : 'N/A'}
-              </span>
-            </div>
+            </p>
           </div>
 
-          {/* Total Duration */}
-          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
-            <p className="text-gray-400 text-sm mb-2">Total Duration</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">
+          {/* Total Duration - Purple */}
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 cursor-pointer hover:bg-purple-500/20 transition-all flex flex-col items-center justify-center">
+            <span className="text-gray-400 text-sm mb-0.5">Total Duration</span>
+            <p className="text-xl font-bold text-purple-400">
                 {generic.total_duration_seconds !== null && generic.total_duration_seconds !== undefined
-                  ? `${Math.floor(generic.total_duration_seconds / 60)}`
+                ? `${Math.floor(generic.total_duration_seconds / 60)}m`
                   : 'N/A'}
-              </span>
-              <span className="text-sm text-gray-400">min</span>
-            </div>
+            </p>
           </div>
 
-          {/* Avg Duration */}
-          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
-            <p className="text-gray-400 text-sm mb-2">Avg Duration</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">
+          {/* Avg Duration - Green */}
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 cursor-pointer hover:bg-green-500/20 transition-all flex flex-col items-center justify-center">
+            <span className="text-gray-400 text-sm mb-0.5">Avg Duration</span>
+            <p className="text-xl font-bold text-green-400">
                 {generic.average_duration_seconds !== null && generic.average_duration_seconds !== undefined
-                  ? `${Math.floor(generic.average_duration_seconds)}`
+                ? `${Math.floor(generic.average_duration_seconds)}s`
                   : 'N/A'}
-              </span>
-              <span className="text-sm text-gray-400">sec</span>
-            </div>
+            </p>
           </div>
 
-          {/* Total Calls */}
-          <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
-            <p className="text-gray-400 text-sm mb-2">Total Calls</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">{generic.total_calls || 0}</span>
-            </div>
+          {/* Total Calls - Orange */}
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2 cursor-pointer hover:bg-orange-500/20 transition-all flex flex-col items-center justify-center">
+            <span className="text-gray-400 text-sm mb-0.5">Total Calls</span>
+            <p className="text-xl font-bold text-orange-400">{generic.total_calls || 0}</p>
           </div>
 
-          {/* Pickup Rate */}
-          {pickupStats && (
-            <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
-              <p className="text-gray-400 text-sm mb-2">Pickup Rate</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-green-400">{pickupStats.pickup_rate.toFixed(1)}</span>
-                <span className="text-lg text-gray-400">%</span>
+          {/* Pickup Rate - Emerald */}
+          {pickupStats && typeof pickupStats.pickup_rate === 'number' ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2 cursor-pointer hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center">
+              <span className="text-gray-400 text-sm mb-0.5">Pickup Rate</span>
+              <p className="text-xl font-bold text-emerald-400">{pickupStats.pickup_rate.toFixed(1)}%</p>
               </div>
+          ) : (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2 flex flex-col items-center justify-center">
+              <span className="text-gray-400 text-sm mb-0.5">Pickup Rate</span>
+              <p className="text-xl font-bold text-white">N/A</p>
             </div>
           )}
         </div>
