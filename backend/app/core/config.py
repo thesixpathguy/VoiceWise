@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     
     # API Keys
-    BLAND_AI_API_KEY: str
+    BLAND_AI_API_KEYS: str  # Comma-separated list of API keys for round-robin
     GROQ_API_KEY: str
     BLAND_AI_WEBHOOK_URL: str = ""
     
@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string"""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+    
+    @property
+    def bland_ai_api_keys_list(self) -> List[str]:
+        """Parse Bland AI API keys from comma-separated string"""
+        keys = [key.strip() for key in self.BLAND_AI_API_KEYS.split(",") if key.strip()]
+        if len(keys) < 2:
+            raise ValueError("BLAND_AI_API_KEYS must contain at least 2 comma-separated keys")
+        return keys
 
 
 # Global settings instance

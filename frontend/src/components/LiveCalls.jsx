@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { callsAPI } from '../api/api';
 import audioService from '../services/audioService';
 
@@ -9,8 +9,20 @@ export default function LiveCalls() {
   const [loading, setLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioStatus, setAudioStatus] = useState('idle');
-  const [audioError, setAudioError] = useState(null);
   const messagesEndRefs = useRef({});
+  const activeTabRef = useRef(null);
+  
+  // Retry tracking
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimeoutRef = useRef(null);
+  
+  // Track which calls disappeared between polls
+  const previousCallIdsRef = useRef(new Set());
+
+  // Keep activeTabRef in sync with activeTab state
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   const parseTimestamp = (timestamp) => {
     if (!timestamp) return new Date();
@@ -52,6 +64,7 @@ export default function LiveCalls() {
     return {
       id: callId,
       blandCallId: apiCall.call_id, // Preserve the actual Bland AI call ID
+      apiKeyIndex: apiCall.api_key_index !== undefined ? apiCall.api_key_index : 0, // NEW: Track which API key was used (0 or 1)
       phoneNumber: apiCall.phone_number,
       startTime: startTime,
       duration: duration,
@@ -63,69 +76,158 @@ export default function LiveCalls() {
     };
   };
 
-  // Fetch live calls from API
-  const fetchLiveCalls = async () => {
+  // Fetch live calls from API with exponential backoff retry
+  const fetchLiveCalls = useCallback(async () => {
     try {
       const apiCalls = await callsAPI.getLiveCalls();
       
       if (!apiCalls || apiCalls.length === 0) {
+        console.log('📞 No live calls from API');
         setLiveCalls([]);
         setActiveTab(null);
         setConversations({});
         setLoading(false);
+        // Reset retry count on successful fetch
+        if (retryCount > 0) {
+          setRetryCount(0);
+        }
         return;
       }
+      
+      console.log(`📞 Got ${apiCalls.length} live calls from API`);
+      
+      // Debug: Log all call IDs from API
+      console.log('📋 API call IDs:', apiCalls.map(c => ({
+        id: c.call_id,
+        phone: c.phone_number,
+        status: c.status,
+        timestamp: c.call_initiated_timestamp,
+        duration: Math.round((new Date() - new Date(c.call_initiated_timestamp)) / 1000) + 's'
+      })));
       
       // Transform API calls to component format
       const transformedCalls = apiCalls.map(transformLiveCall);
       
-      // Update conversations state
+      // Sort calls by start time (newest first) for stable ordering
+      const sortedCalls = transformedCalls.sort((a, b) => 
+        b.startTime.getTime() - a.startTime.getTime()
+      );
+      
+      // Identify calls that were in state but are no longer in API response
+      const currentCallIds = new Set(sortedCalls.map(c => c.id));
+      const disappearedCallIds = [...previousCallIdsRef.current].filter(id => !currentCallIds.has(id));
+      
+      // Log calls that disappeared
+      if (disappearedCallIds.length > 0) {
+        disappearedCallIds.forEach(id => {
+          console.log(`📴 Call ${id} disappeared from API response (call ended)`);
+        });
+      }
+      
+      // Update ref with current call IDs for next poll
+      previousCallIdsRef.current = currentCallIds;
+      
+      // Remove conversations for calls that are gone
+      if (activeTabRef.current && !currentCallIds.has(activeTabRef.current)) {
+        console.log(`❌ Active call ${activeTabRef.current} is no longer available`);
+      }
+      
+      // Update conversations state - keep only conversations for calls that still exist
       const newConversations = {};
-      transformedCalls.forEach(call => {
+      sortedCalls.forEach(call => {
         newConversations[call.id] = call.conversation || [];
       });
+      
       setConversations(newConversations);
       
-      // Update live calls
-      setLiveCalls(transformedCalls);
+      // Update live calls with sorted order
+      setLiveCalls(sortedCalls);
       
       // Always set first call as active if available and no active tab is set
-      if (transformedCalls.length > 0 && !activeTab) {
-        setActiveTab(transformedCalls[0].id);
+      if (sortedCalls.length > 0 && !activeTabRef.current) {
+        setActiveTab(sortedCalls[0].id);
       }
       
       // If active tab no longer exists, set first call as active
-      if (activeTab && !transformedCalls.find(c => c.id === activeTab)) {
-        setActiveTab(transformedCalls[0]?.id || null);
+      if (activeTabRef.current && !sortedCalls.find(c => c.id === activeTabRef.current)) {
+        setActiveTab(sortedCalls[0]?.id || null);
       }
       
       setLoading(false);
+      // Reset retry count on successful fetch
+      if (retryCount > 0) {
+        setRetryCount(0);
+        console.log('✅ API recovered - retry count reset');
+      }
     } catch (error) {
       console.error('Failed to fetch live calls:', error);
       setLoading(false);
-      // Don't clear existing calls on error to avoid flickering
+      
+      // Implement exponential backoff retry strategy
+      const maxRetries = 3; // Max 3 retries (2s, 4s, 8s)
+      const baseDelay = 2000; // Start with 2 seconds
+      const newRetryCount = retryCount + 1;
+      
+      if (newRetryCount <= maxRetries) {
+        // Calculate delay with exponential backoff: 2s, 4s, 8s, 16s, 32s
+        const delay = baseDelay * Math.pow(2, Math.min(newRetryCount - 1, 3));
+        const delaySeconds = Math.round(delay / 1000);
+        
+        console.warn(
+          `⚠️ API Error: Retry ${newRetryCount}/${maxRetries} in ${delaySeconds}s...`,
+          error.message
+        );
+        
+        setRetryCount(newRetryCount);
+        
+        // Clear any pending retry timeout
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+        }
+        
+        // Schedule retry with exponential backoff
+        retryTimeoutRef.current = setTimeout(() => {
+          console.log(`🔄 Retrying API call (attempt ${newRetryCount}/${maxRetries})...`);
+          fetchLiveCalls();
+        }, delay);
+      } else {
+        console.error('❌ Max retries exceeded. Clearing ONLY failed calls.');
+        
+        // On max retries, we can't determine which calls are still live
+        // Clear all state to be safe - but log this clearly
+        console.warn('ℹ️ Unable to verify call status after retries - clearing to prevent stale data');
+        setLiveCalls([]);
+        setActiveTab(null);
+        setConversations({});
+        setRetryCount(0); // Reset for next batch
+      }
     }
-  };
+  }, [retryCount]);
 
-  // Poll API every 2 seconds
+  // Poll API every 2 seconds (when no retries are pending)
   useEffect(() => {
     // Initial fetch
     fetchLiveCalls();
     
-    // Set up polling interval
-    const interval = setInterval(() => {
-      fetchLiveCalls();
-    }, 2000); // Poll every 2 seconds
-    
-    return () => clearInterval(interval);
-  }, []); // Only run on mount/unmount
-
-  // Update activeTab when liveCalls change (to ensure first call is always active)
-  useEffect(() => {
-    if (liveCalls.length > 0 && !activeTab) {
-      setActiveTab(liveCalls[0].id);
+    // Only set up polling if we're not in a retry backoff state
+    if (retryCount === 0) {
+      const interval = setInterval(() => {
+        fetchLiveCalls();
+      }, 2000); // Poll every 2 seconds
+      
+      return () => clearInterval(interval);
     }
-  }, [liveCalls.length]); // Only when length changes
+    
+    // Cleanup on unmount or when retry count changes
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [fetchLiveCalls, retryCount]);
+
+  // Don't update activeTab on liveCalls change - keep user's selection
+  // activeTab should only change if the selected call ends
 
   const handleTabClick = (callId) => {
     setActiveTab(callId);
@@ -134,20 +236,21 @@ export default function LiveCalls() {
 
   const handlePlayAudio = async () => {
     try {
-      setAudioError(null);
       setAudioStatus('connecting');
       setIsPlayingAudio(true);
-
-      const blandApiKey = import.meta.env.VITE_BLAND_AI_API_KEY || 
-                         localStorage.getItem('bland_api_key');
-
-      if (!blandApiKey) {
-        throw new Error('Bland AI API key not configured');
-      }
 
       const activeCall = liveCalls.find(c => c.id === activeTab);
       if (!activeCall) {
         throw new Error('No active call selected');
+      }
+
+      // Get API keys from env and select by index
+      const apiKeysStr = import.meta.env.VITE_BLAND_AI_API_KEYS;
+      const apiKeys = apiKeysStr.split(',').map(key => key.trim());
+      const blandApiKey = apiKeys[activeCall.apiKeyIndex] || apiKeys[0];
+
+      if (!blandApiKey) {
+        throw new Error('Bland AI API key not configured');
       }
 
       // Use the actual Bland AI call_id
@@ -156,7 +259,7 @@ export default function LiveCalls() {
         throw new Error('Call ID not available from Bland AI');
       }
 
-      console.log('[Audio] Requesting WebSocket URL for call:', blandCallId);
+      console.log(`[Audio] Using API key index ${activeCall.apiKeyIndex} for call:`, blandCallId);
 
       const listenResponse = await callsAPI.getLiveCallAudio(blandCallId, blandApiKey);
       const wsUrl = listenResponse?.data?.url;
@@ -171,14 +274,13 @@ export default function LiveCalls() {
         wsUrl,
         (status) => setAudioStatus(status),
         (error) => {
-          setAudioError(error);
+          console.error('[Audio] Playback error:', error);
           setIsPlayingAudio(false);
           setAudioStatus('error');
         }
       );
     } catch (error) {
       console.error('Error playing audio:', error);
-      setAudioError(error.message);
       setAudioStatus('error');
       setIsPlayingAudio(false);
     }
@@ -188,7 +290,6 @@ export default function LiveCalls() {
     audioService.stopAudioPlayback();
     setIsPlayingAudio(false);
     setAudioStatus('idle');
-    setAudioError(null);
   };
 
   // Auto-scroll to bottom when conversation updates
@@ -197,14 +298,6 @@ export default function LiveCalls() {
       messagesEndRefs.current[activeTab]?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [conversations, activeTab]);
-
-  const formatTime = (date) => {
-    const now = new Date();
-    const diff = Math.floor((now - date) / 1000);
-    if (diff < 60) return `${diff}s`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-    return `${Math.floor(diff / 3600)}h`;
-  };
 
   const getSentimentColor = (sentiment) => {
     switch (sentiment) {
@@ -371,14 +464,6 @@ export default function LiveCalls() {
                             <span>
                               {audioStatus === 'connecting' ? 'Connecting...' : audioStatus === 'playing' ? 'Playing' : audioStatus}
                             </span>
-                          </div>
-                        )}
-
-                        {/* Error Display */}
-                        {audioError && (
-                          <div className="flex items-center gap-1 text-xs text-red-400">
-                            <span>⚠️</span>
-                            <span>{audioError}</span>
                           </div>
                         )}
                       </div>

@@ -17,7 +17,7 @@ class CallService:
     
     def __init__(self, db: Session):
         self.db = db
-        self.bland_api_key = settings.BLAND_AI_API_KEY
+        self.bland_api_keys_list = settings.bland_ai_api_keys_list  # List of API keys for round-robin
         self.bland_api_url = "https://api.bland.ai/v1/calls"
         self.ai_service = AIService()
     
@@ -42,20 +42,25 @@ class CallService:
         for index, phone_number in enumerate(phone_numbers):
             try:
                 # Add 30-second delay between calls (Bland AI rate limit)
-                if index > 0:
+                if index > 1:
                     print(f"⏳ Waiting 85 seconds before next call (Bland AI rate limit)...")
                     print(f"phone_number: {phone_number}")
                     await asyncio.sleep(85)
                 
-                # Call Bland AI API to initiate call
-                call_id = await self._initiate_bland_call(phone_number, gym_id, custom_instructions)
+                # Simple toggle for round-robin: alternate between API key 0 and 1
+                api_key_index = index % 2
+                print(f"🔄 Round-robin: Call #{index} → Using API key index {api_key_index}")
                 
-                # Store call in database with custom instructions
+                # Call Bland AI API to initiate call with selected API key
+                call_id = await self._initiate_bland_call(phone_number, gym_id, custom_instructions, api_key_index)
+                
+                # Store call in database with api_key_index
                 call = Call(
                     call_id=call_id,
                     phone_number=phone_number,
                     gym_id=gym_id,
                     status="initiated",
+                    api_key_index=api_key_index,  # Track which API key was used
                     custom_instructions=custom_instructions if custom_instructions else None
                 )
                 self.db.add(call)
@@ -66,18 +71,21 @@ class CallService:
                     CallResponse(
                         phone_number=phone_number,
                         call_id=call_id,
-                        status="initiated"
+                        status="initiated",
+                        api_key_index=api_key_index  # Include the key index
                     )
                 )
             
             except Exception as e:
                 print(f"❌ Failed to initiate call to {phone_number}: {str(e)}")
                 # Continue with other numbers even if one fails
+                api_key_index = index % 2  # Still track which key would have been used
                 calls_initiated.append(
                     CallResponse(
                         phone_number=phone_number,
                         call_id="failed",
-                        status="failed"
+                        status="failed",
+                        api_key_index=api_key_index
                     )
                 )
         
@@ -86,18 +94,33 @@ class CallService:
             total=len(calls_initiated)
         )
     
-    async def _initiate_bland_call(self, phone_number: str, gym_id: str, custom_instructions: Optional[List[str]] = None) -> str:
+    async def _initiate_bland_call(
+        self, 
+        phone_number: str, 
+        gym_id: str, 
+        custom_instructions: Optional[List[str]] = None,
+        api_key_index: int = 0
+    ) -> str:
         """
-        Call Bland AI API to initiate a call
+        Call Bland AI API to initiate a call with specified API key
+        
+        Args:
+            phone_number: Number to call
+            gym_id: Gym identifier
+            custom_instructions: Optional instructions
+            api_key_index: Which API key to use (0 or 1)
         
         Returns:
             call_id from Bland AI
         """
-        if not self.bland_api_key:
-            raise Exception("BLAND_AI_API_KEY is not configured. Please set it in your .env file.")
+        # Select API key based on index
+        api_key = self.bland_api_keys_list[api_key_index]
+        
+        if not api_key:
+            raise Exception(f"BLAND_AI_API_KEY at index {api_key_index} is not configured.")
         
         headers = {
-            "Authorization": f"Bearer {self.bland_api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
@@ -941,7 +964,16 @@ class CallService:
             # If absent, create a new LiveCall object
             if live_call is None:
                 call = self.get_call_by_id(payload.call_id)
-                phone_number = call.phone_number if call else "unknown"
+                # Try to get phone number from database, then from webhook payload, then default to unknown
+                phone_number = call.phone_number if call else (payload.to if payload.to else "unknown")
+                api_key_index = call.api_key_index if call and hasattr(call, 'api_key_index') else 0
+                
+                # Log the phone number source for debugging
+                if not call:
+                    source = "webhook_payload" if payload.to else "default"
+                    print(f"⚠️ Call {payload.call_id} not in DB, using phone number from {source}: {phone_number}")
+                else:
+                    print(f"✅ Call {payload.call_id} found in DB: {phone_number}")
                 
                 # Get timestamp from payload, call, or current time
                 call_timestamp = payload.timestamp
@@ -962,7 +994,8 @@ class CallService:
                     conversation=[new_conversation_turn],
                     sentiment=None,
                     call_initiated_timestamp=call_timestamp,
-                    phone_number=phone_number
+                    phone_number=phone_number,
+                    api_key_index=api_key_index
                 )
                 
                 # Store in cache
