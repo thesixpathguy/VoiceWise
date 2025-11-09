@@ -112,6 +112,7 @@ class SearchService:
                 "created_at": call.created_at.isoformat() if call.created_at else None,
                 "duration_seconds": call.duration_seconds,
                 "raw_transcript": call.raw_transcript,
+                "api_key_index": getattr(call, "api_key_index", 0),
                 "gym_id": call.gym_id,
                 "custom_instructions": call.custom_instructions if call.custom_instructions else None,
                 "insights": {

@@ -41,7 +41,7 @@ services:
       
       # AI Services
       GROQ_API_KEY: ${GROQ_API_KEY}
-      BLAND_AI_API_KEY: ${BLAND_AI_API_KEY}
+      BLAND_AI_API_KEYS: ${BLAND_AI_API_KEYS}
       BLAND_AI_WEBHOOK_URL: ${BLAND_AI_WEBHOOK_URL:-}
       
       # Application Settings
@@ -81,7 +81,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_BLAND_AI_API_KEY: ${BLAND_AI_API_KEY}
+        VITE_BLAND_AI_API_KEYS: ${BLAND_AI_API_KEYS}
     restart: unless-stopped
     container_name: voicewise-frontend
     ports:
